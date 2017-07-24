@@ -117,9 +117,9 @@ class LocatorIterator
 
 
 // helper routine declarations
-//void AllocateAndInitialize2DArray(double**& arrayPtr, int const extentZero,
-//                                  int const extentOne);
-//void Deallocate2DArray(double**& arrayPtr);
+void AllocateAndInitialize2DArray(double**& arrayPtr, int const extentZero,
+                                  int const extentOne);
+void Deallocate2DArray(double**& arrayPtr);
 
 
 
@@ -157,6 +157,7 @@ class ANNImplementation
   int numberOfSpeciesIndex_;
   int numberOfParticlesIndex_;
   int particleSpeciesIndex_;
+  int particleStatusIndex_;
   int coordinatesIndex_;
   int get_neighIndex_;
   int process_dEdrIndex_;
@@ -334,7 +335,6 @@ int ANNImplementation::Compute(
   double* pRij = 0;
   int const baseConvert = baseconvert_;
 	double const* const* const  constCutoffsSq2D = cutoffsSq2D_;
-  int const cachedNumContribParticles = cachedNumberContributingParticles_;
 
 	for (Iter iterator(pkim, get_neigh, baseConvert,
                      cachedNumberContributingParticles_, &ii, &numnei, &n1atom,
@@ -344,7 +344,6 @@ int ANNImplementation::Compute(
   {
     int const numNei = numnei;
     int const * const n1Atom = n1atom;
-    double const * const pRijConst = pRij;
     int const i = ii;
     int const iSpecies = particleSpecies[i];
 
@@ -368,10 +367,10 @@ int ANNImplementation::Compute(
       if (rij2 <= constCutoffsSq2D[iSpecies][jSpecies])
       { // compute contribution to energy, force, etc.
         double phi = 0.0;
-        double dphiByR = 0.0;
-        double d2phi = 0.0;
-        double dEidrByR = 0.0;
-        double d2Eidr2 = 0.0;
+      //  double dphiByR = 0.0;
+      //  double d2phi = 0.0;
+      //  double dEidrByR = 0.0;
+      //  double d2Eidr2 = 0.0;
 
         // Compute pair potential and its derivatives
         if ((isComputeProcess_dEdr == true) || (isComputeForces == true))

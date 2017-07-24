@@ -57,6 +57,7 @@ ANNImplementation::ANNImplementation(
     : numberOfSpeciesIndex_(-1),  // initizlize index, pointer, and cached
       numberOfParticlesIndex_(-1),    // member variables
       particleSpeciesIndex_(-1),
+			particleStatusIndex_(-1),
       coordinatesIndex_(-1),
       get_neighIndex_(-1),
       process_dEdrIndex_(-1),
@@ -68,6 +69,7 @@ ANNImplementation::ANNImplementation(
       numberModelSpecies_(0),
       numberUniqueSpeciesPairs_(0),
       cutoffs_(0),
+			cutoffsSq2D_(0),
       cachedNumberOfParticles_(0),
       cachedNumberContributingParticles_(0)
 			// add potential parameters
@@ -187,10 +189,11 @@ int ANNImplementation::SetConstantValues(KIM_API_model* const pkim)
 
   // obtain indices for various KIM API Object arguments
   pkim->getm_index(
-      &ier, 3 * 11,
+      &ier, 3 * 12,
       "numberOfSpecies",             &numberOfSpeciesIndex_,             1,
       "numberOfParticles",           &numberOfParticlesIndex_,           1,
       "particleSpecies",             &particleSpeciesIndex_,             1,
+      "particleStatus",							 &particleStatusIndex_,              1,
       "coordinates",                 &coordinatesIndex_,                 1,
       "get_neigh",                   &get_neighIndex_,                   1,
       "process_dEdr",                &process_dEdrIndex_,                1,
@@ -199,8 +202,7 @@ int ANNImplementation::SetConstantValues(KIM_API_model* const pkim)
       "energy",                      &energyIndex_,                      1,
       "forces",                      &forcesIndex_,                      1,
       "particleEnergy",              &particleEnergyIndex_,              1);
-  if (ier < KIM_STATUS_OK)
-  {
+  if (ier < KIM_STATUS_OK) {
     pkim->report_error(__LINE__, __FILE__, "getm_index", ier);
     return ier;
   }
@@ -208,8 +210,7 @@ int ANNImplementation::SetConstantValues(KIM_API_model* const pkim)
   // set numberModelSpecies & numberUniqueSpeciesPairs
   int dummy;
   ier = pkim->get_num_model_species(&numberModelSpecies_, &dummy);
-  if (ier < KIM_STATUS_OK)
-  {
+  if (ier < KIM_STATUS_OK) {
     pkim->report_error(__LINE__, __FILE__, "get_num_model_species", ier);
     return ier;
   }
@@ -269,13 +270,30 @@ int ANNImplementation::ProcessParameterFiles(
     FILE* const parameterFilePointers[MAX_PARAMETER_FILES],
     int const numberParameterFiles)
 {
-  int N, ier;
+  int ier;
+  //int N;
   int endOfFileFlag = 0;
-  char spec1[MAXLINE], spec2[MAXLINE], nextLine[MAXLINE];
+  char nextLine[MAXLINE];
+  //char spec1[MAXLINE], spec2[MAXLINE];
   char *nextLinePtr;
-  int iIndex, jIndex , indx, iiIndex, jjIndex;
-  double nextCutoff, nextEpsilon, nextSigma;
+  //int iIndex, jIndex , indx, iiIndex, jjIndex;
+  //double nextCutoff;
   nextLinePtr = nextLine;
+	double cutoff;
+
+	// cutoff
+  getNextDataLine(parameterFilePointers[0], nextLinePtr, MAXLINE, &endOfFileFlag);
+  ier = sscanf(nextLine, "%lf", &cutoff);
+  if (ier != 1) {
+    sprintf(nextLine, "unable to read first line of the parameter file");
+    ier = KIM_STATUS_FAIL;
+    pkim->report_error(__LINE__, __FILE__, nextLine, ier);
+    fclose(parameterFilePointers[0]);
+    return ier;
+  }
+	cutoffs_[0] = cutoff;
+
+
 
 /*
   getNextDataLine(parameterFilePointers[0], nextLinePtr,
@@ -397,22 +415,7 @@ int ANNImplementation::ProcessParameterFiles(
     return KIM_STATUS_FAIL;
   }
 
-  // Perform Mixing if nessisary
-  for (int jIndex = 0; jIndex < N; jIndex++)
-  {
-    jjIndex = (jIndex*N + jIndex - (jIndex*jIndex + jIndex)/2);
-    for (int iIndex = (jIndex+1) ; iIndex < N; iIndex++)
-    {
-      indx = jIndex*N + iIndex - (jIndex*jIndex + jIndex)/2;
-      if (cutoffs_[indx] == -1)
-      {
-        iiIndex = (iIndex*N + iIndex - (iIndex*iIndex + iIndex)/2);
-        epsilons_[indx] = sqrt(epsilons_[iiIndex]*epsilons_[jjIndex]);
-        sigmas_[indx] = (sigmas_[iiIndex] + sigmas_[jjIndex])/2.0;
-        cutoffs_[indx] = (cutoffs_[iiIndex] + cutoffs_[jjIndex])/2.0;
-      }
-    }
-  }
+
   delete [] particleNames;
 
 */
@@ -456,7 +459,7 @@ void ANNImplementation::CloseParameterFiles(
 void ANNImplementation::AllocateFreeParameterMemory()
 { // allocate memory for data
   cutoffs_ = new double[numberUniqueSpeciesPairs_];
-
+	AllocateAndInitialize2DArray(cutoffsSq2D_, numberModelSpecies_, numberModelSpecies_);
 }
 
 //******************************************************************************
@@ -465,11 +468,12 @@ int ANNImplementation::ConvertUnits(KIM_API_model* const pkim)
   int ier;
 
   // define default base units
-  char length[] = "A";
+/*  char length[] = "A";
   char energy[] = "eV";
   char charge[] = "e";
   char temperature[] = "K";
   char time[] = "ps";
+*/
 
 /*
   // changing units of cutoffs and sigmas
@@ -548,8 +552,7 @@ int ANNImplementation::RegisterKIMFunctions(
                     "destroy", 1, (func_ptr) &(ANN::Destroy), 1,
                     "reinit",  1, (func_ptr) &(ANN::Reinit),  1,
                     "compute", 1, (func_ptr) &(ANN::Compute), 1);
-  if (ier < KIM_STATUS_OK)
-  {
+  if (ier < KIM_STATUS_OK) {
     pkim->report_error(__LINE__, __FILE__, "setm_method", ier);
     return ier;
   }
@@ -565,6 +568,15 @@ int ANNImplementation::SetReinitMutableValues(
 { // use (possibly) new values of free parameters to compute other quantities
   int ier;
 
+	// update cutoffsSq (This requires PECIES_001_NAME_STR needs to have code 0,
+	// SPECIES_002_NAME_STR needs to have code 1 ... in .kim file)
+	for (int i = 0; i < numberModelSpecies_; ++i) {
+		for (int j = 0; j <= i ; ++j) {
+			int const index = j*numberModelSpecies_ + i - (j*j + j)/2;
+			cutoffsSq2D_[i][j] = cutoffsSq2D_[j][i] = (cutoffs_[index]*cutoffs_[index]);
+		}
+	}
+
   // get cutoff pointer
   double* const cutoff
       = static_cast<double*>(pkim->get_data_by_index(cutoffIndex_, &ier));
@@ -573,14 +585,52 @@ int ANNImplementation::SetReinitMutableValues(
     return ier;
   }
 
-  // update cutoff value in KIM API object
-  *cutoff = 0;
-  int numberSpecies, maxStringLength;
-  ier = pkim->get_num_sim_species(&numberSpecies, &maxStringLength);
-  if (ier < KIM_STATUS_OK) {
-    pkim->report_error(__LINE__, __FILE__, "get_num_sim_species", ier);
-    return ier;
-  }
+	// update cutoff value in KIM API object
+	*cutoff = 0;
+	int numberSpecies, maxStringLength;
+	ier = pkim->get_num_sim_species(&numberSpecies, &maxStringLength);
+	if (ier < KIM_STATUS_OK) {
+		pkim->report_error(__LINE__, __FILE__, "get_num_sim_species", ier);
+		return ier;
+	}
+
+	// find the largest cutoff of a subset of all the supported species of the model
+	const char* simSpeciesI;
+	const char* simSpeciesJ;
+	for (int i = 0; i < numberSpecies; i++) {
+		ier = pkim->get_sim_species(i, &simSpeciesI);
+		if (ier < KIM_STATUS_OK) {
+			pkim->report_error(__LINE__, __FILE__, "get_num_sim_species", ier);
+			return ier;
+		}
+		int const indexI = pkim->get_species_code(simSpeciesI, &ier);
+		if (indexI >= numberModelSpecies_ || ier<KIM_STATUS_OK ) {
+			pkim->report_error(__LINE__, __FILE__, "get_species_code",
+					KIM_STATUS_FAIL);
+			return KIM_STATUS_FAIL;
+		}
+
+		for (int j = 0; j < numberSpecies; j++) {
+			ier = pkim->get_sim_species( j, &simSpeciesJ);
+			if (ier < KIM_STATUS_OK) {
+				pkim->report_error(__LINE__, __FILE__, "get_num_sim_species", ier);
+				return ier;
+			}
+			int const indexJ = pkim->get_species_code(simSpeciesJ, &ier);
+			if (indexJ >= numberModelSpecies_ || ier<KIM_STATUS_OK ) {
+				pkim->report_error(__LINE__, __FILE__, "get_species_code",
+						KIM_STATUS_FAIL);
+				return KIM_STATUS_FAIL;
+			}
+			if (*cutoff < cutoffsSq2D_[indexI][indexJ]) {
+				*cutoff = cutoffsSq2D_[indexI][indexJ];
+			}
+		}
+	}
+	*cutoff = sqrt(*cutoff);
+
+
+//TODO update of other free params shoud go here
 
 
   // everything is good
@@ -605,7 +655,7 @@ int ANNImplementation::SetComputeMutableValues(
 {
   int ier = KIM_STATUS_FAIL;
 
-  // get compute flags
+	// get compute flags
   int compEnergy;
   int compForces;
   int compParticleEnergy;
@@ -617,8 +667,7 @@ int ANNImplementation::SetComputeMutableValues(
                               particleEnergyIndex_, &compParticleEnergy, 1,
                               process_dEdrIndex_,   &compProcess_dEdr,   1,
                               process_d2Edr2Index_, &compProcess_d2Edr2, 1);
-  if (ier < KIM_STATUS_OK)
-  {
+  if (ier < KIM_STATUS_OK) {
     pkim->report_error(__LINE__, __FILE__, "getm_compute_by_index", ier);
     return ier;
   }
@@ -630,32 +679,39 @@ int ANNImplementation::SetComputeMutableValues(
   isComputeProcess_d2Edr2 = (compProcess_d2Edr2 == KIM_COMPUTE_TRUE);
 
   // extract pointers based on compute flags
-  //
-  // double const* cutoff;            // currently unused
-  // int const* numberOfSpecies;  // currently unused
   int const* numberOfParticles;
+  int const* particleStatus = 0;
   pkim->getm_data_by_index(
-      &ier, 3 * 6,
-      // cutoffIndex_, &cutoff, 1,
-      // numberOfSpeciesIndex_, &numberOfSpecies, 1,
+      &ier, 3 * 7,
       numberOfParticlesIndex_, &numberOfParticles, 1,
-      particleSpeciesIndex_, &particleSpecies, 1,
-      coordinatesIndex_, &coordinates, 1,
-      energyIndex_, &energy, compEnergy,
-      particleEnergyIndex_, &particleEnergy, compParticleEnergy,
-      forcesIndex_, &forces, compForces);
-  if (ier < KIM_STATUS_OK)
-  {
+      particleSpeciesIndex_,	 &particleSpecies,	 1,
+      particleStatusIndex_,		 &particleStatus,		 1,
+      coordinatesIndex_,			 &coordinates,			 1,
+      energyIndex_,						 &energy,						 compEnergy,
+      particleEnergyIndex_,		 &particleEnergy,		 compParticleEnergy,
+      forcesIndex_,						 &forces,						 compForces);
+  if (ier < KIM_STATUS_OK) {
     pkim->report_error(__LINE__, __FILE__, "getm_data_by_index", ier);
     return ier;
   }
+
+	// get neigh function
+	get_neigh = (GetNeighborFunction *) pkim->get_method_by_index(get_neighIndex_, &ier);
+	if (ier < KIM_STATUS_OK) {
+		pkim->report_error(__LINE__, __FILE__, "get_method_by_index", ier);
+		return ier;
+	}
 
   // update values
   cachedNumberOfParticles_ = *numberOfParticles;
 
 	// set so that it can be used even with a full neighbor list
-	cachedNumberContributingParticles_ = *numberOfParticles;
-
+	cachedNumberContributingParticles_ = 0;
+	for (int i=0; i<*numberOfParticles; i++) {
+		if (particleStatus[i] == 1) {
+			cachedNumberContributingParticles_ += 1;
+		}
+	}
 
   // everything is good
   ier = KIM_STATUS_OK;
@@ -693,7 +749,7 @@ int ANNImplementation::GetComputeIndex(
     const bool& isComputeForces,
     const bool& isComputeParticleEnergy) const
 {
-  const int processdE = 2;
+  //const int processdE = 2;
   const int processd2E = 2;
   const int energy = 2;
   const int force = 2;
