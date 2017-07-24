@@ -1,0 +1,5 @@
+*.o
+*bkp
+*.so
+*.a
+ANNImplementationComputeDispatch.cpp
