@@ -23,8 +23,7 @@
 # All rights reserved.
 #
 # Contributors:
-#    Ryan S. Elliott
-#    Andrew Akerson
+#    Mingjian Wen
 #
 
 ################################################################################
@@ -72,6 +71,8 @@ numberOfSpecies             integer      none                []
 
 particleSpecies             integer      none                [numberOfParticles]
 
+particleStatus              integer      none                [numberOfParticles]
+
 coordinates                 double       length              [numberOfParticles,3]
 
 get_neigh                   method       none                []                 optional
@@ -106,5 +107,5 @@ particleEnergy              double       energy              [numberOfParticles]
 MODEL_PARAMETERS:
 # Name                      Type         Unit                Shape              Requirements
 
-PARAM_FREE_shift            integer      none                []
+#PARAM_FREE_shift            integer      none                []
 

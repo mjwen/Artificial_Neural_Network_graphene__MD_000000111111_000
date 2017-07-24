@@ -520,7 +520,7 @@ int ANNImplementation::RegisterKIMParameters(
   int ier;
 
   // publish parameters
-  pkim->setm_data(&ier, 1 * 4,
+/*  pkim->setm_data(&ier, 1 * 4,
                   //
                   "PARAM_FREE_cutoffs",
                   numberUniqueSpeciesPairs_,
@@ -530,7 +530,7 @@ int ANNImplementation::RegisterKIMParameters(
     pkim->report_error(__LINE__, __FILE__, "setm_data", ier);
     return ier;
   }
-
+*/
   // everything is good
   ier = KIM_STATUS_OK;
   return ier;
