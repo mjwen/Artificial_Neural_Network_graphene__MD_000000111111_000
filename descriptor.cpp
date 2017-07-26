@@ -7,8 +7,8 @@
 Descriptor::Descriptor(){}
 
 Descriptor::~Descriptor() {
-	for (size_t i=0; i<desc_param.size(); i++) {
-		Deallocate2DArray(desc_param.at(i));
+	for (size_t i=0; i<desc_params.size(); i++) {
+		Deallocate2DArray(desc_params.at(i));
 	}
 }
 
@@ -39,9 +39,15 @@ void Descriptor::add_descriptor(char* name, double** values, int row, int col)
 		}
 	}
 	desc_name.push_back(name);
-	desc_param.push_back(params);
-	num_desc.push_back(row);
-	num_param.push_back(col);
+	desc_params.push_back(params);
+	num_param_sets.push_back(row);
+	num_params.push_back(col);
+
+//TODO delete
+  std::cout<<"flag add_descriptor"<<std::endl;
+  print_mat(desc_params.back(), num_param_sets.back(), num_params.back());
+
+
 }
 
 

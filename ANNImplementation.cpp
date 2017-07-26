@@ -332,9 +332,29 @@ int ANNImplementation::ProcessParameterFiles(
     }
 
     // check size of params is correct w.r.t its name
-    if (strcmp(name, "G2") == 0 && numParams != 2) {
-      sprintf(errorMsg, "number of params for descriptor G2 is incorrect, "
-                        "expecting 2, but given is %d.\n", numParams);
+    if (strcmp(name, "G2") == 0) {
+      if (numParams != 2) {
+        sprintf(errorMsg, "number of params for descriptor G2 is incorrect, "
+            "expecting 2, but given %d.\n", numParams);
+        ier = KIM_STATUS_FAIL;
+        pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+        fclose(parameterFilePointers[0]);
+        return ier;
+      }
+    }
+    else if (strcmp(name, "G3") == 0) {
+      if (numParams != 1) {
+        sprintf(errorMsg, "number of params for descriptor G3 is incorrect, "
+            "expecting 1, but given %d.\n", numParams);
+        ier = KIM_STATUS_FAIL;
+        pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+        fclose(parameterFilePointers[0]);
+        return ier;
+      }
+    }
+    else {
+      sprintf(errorMsg, "unsupported descriptor `%s' from line:\n", name);
+      strcat(errorMsg, nextLine);
       ier = KIM_STATUS_FAIL;
       pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
       fclose(parameterFilePointers[0]);
@@ -354,19 +374,11 @@ int ANNImplementation::ProcessParameterFiles(
         fclose(parameterFilePointers[0]);
         return ier;
       }
-
     }
 
-
-//TODO delete
-    std::cout<<"flag params"<<std::endl;
-    for (int m=0; m<numParamSets; m++) {
-      for (int n=0; n<numParams; n++) {
-        std::cout<<descParams[m][n]<< " ";
-      }
-      std::cout<<std::endl;
-    }
-
+    // store data in Descriptor
+    descriptor_->add_descriptor(name, descParams, numParamSets, numParams);
+    Deallocate2DArray(descParams);
   }
 
 

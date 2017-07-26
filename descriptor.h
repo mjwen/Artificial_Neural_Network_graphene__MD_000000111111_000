@@ -34,10 +34,10 @@ class Descriptor
 	private:
 		CutoffFunction cutoff;
 		dCutoffFunction d_cutoff;
-		std::vector<std::string> desc_name;  // name of each descriptor
-		std::vector<double**> desc_param;  // params of each descriptor
-		std::vector<int> num_desc;   // number of parameter sets of each descriptor
-		std::vector<int> num_param;  // number of parameters of each descriptor
+		std::vector<std::string> desc_name; // name of each descriptor
+		std::vector<double**> desc_params;  // params of each descriptor
+		std::vector<int> num_param_sets;    // number of parameter sets of each descriptor
+		std::vector<int> num_params;        // size of parameters of each descriptor
 };
 
 

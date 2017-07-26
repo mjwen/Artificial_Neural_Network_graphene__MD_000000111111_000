@@ -3,6 +3,8 @@
 // Implementation of helper functions
 //
 //==============================================================================
+#include <iostream>
+#include "helper.h"
 
 // allocate memory and set pointers
 void AllocateAndInitialize2DArray(double**& arrayPtr, int const extentZero,
@@ -30,4 +32,19 @@ void Deallocate2DArray(double**& arrayPtr) {
 	// nullify pointer
 	arrayPtr = 0;
 }
+
+
+
+//TODO delete
+void print_mat(double** mat, int rows, int cols) {
+  for (int m=0; m<rows; m++) {
+    for (int n=0; n<cols; n++) {
+      std::cout<<mat[m][n]<< " ";
+    }
+    std::cout<<std::endl;
+  }
+  std::cout<<std::endl;
+}
+
+
 
