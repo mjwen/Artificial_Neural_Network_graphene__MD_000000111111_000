@@ -78,8 +78,9 @@ ANNImplementation::ANNImplementation(
 
 
 {
-	// create descriptor class
+	// create descriptor and network classes
 	descriptor_ = new Descriptor();
+	network_ = new NeuralNetwork();
 
   *ier = SetConstantValues(pkim);
   if (*ier < KIM_STATUS_OK) return;
@@ -283,11 +284,20 @@ int ANNImplementation::ProcessParameterFiles(
   char name[MAXLINE];
 	double cutoff;
 
+  // descriptor
 	int numDescTypes;
+	int numDescs;
 	int numParams;
 	int numParamSets;
 	double** descParams;
-	//char spec1[MAXLINE], spec2[MAXLINE];
+
+  // network
+  int numLayers;
+  int* numPerceptrons;
+	double** weight;
+	double* bias;
+
+  //char spec1[MAXLINE], spec2[MAXLINE];
   //int iIndex, jIndex , indx, iiIndex, jjIndex;
   //double nextCutoff;
 
@@ -305,7 +315,7 @@ int ANNImplementation::ProcessParameterFiles(
 	descriptor_->set_cutfunc(name);
 	cutoffs_[0] = cutoff;
 
-	// descriptor
+	// number of descriptor types
   getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
   ier = sscanf(nextLine, "%d", &numDescTypes);
   if (ier != 1) {
@@ -376,12 +386,111 @@ int ANNImplementation::ProcessParameterFiles(
       }
     }
 
-    // store data in Descriptor
+    // copy data to Descriptor
     descriptor_->add_descriptor(name, descParams, numParamSets, numParams);
     Deallocate2DArray(descParams);
   }
+//TODO delete
+  descriptor_->echo_input();
 
 
+  // network structure
+  // number of layers
+  getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
+  ier = sscanf(nextLine, "%d", &numLayers);
+  if (ier != 1) {
+    sprintf(errorMsg, "unable to read number of layers from line:\n");
+    strcat(errorMsg, nextLine);
+    ier = KIM_STATUS_FAIL;
+    pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+    fclose(parameterFilePointers[0]);
+    return ier;
+  }
+  // number of perceptrons in each layer
+  numPerceptrons = new int[numLayers];
+  getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
+  ier = getXint(nextLine, numLayers, numPerceptrons);
+  if (ier != KIM_STATUS_OK) {
+    sprintf(errorMsg, "unable to read number of perceptrons from line:\n");
+    strcat(errorMsg, nextLine);
+    ier = KIM_STATUS_FAIL;
+    pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+    fclose(parameterFilePointers[0]);
+    return ier;
+  }
+  // number of descriptors, (size of input)
+  numDescs = descriptor_->get_num_descriptors();
+  // copy to network class
+  network_->set_nn_structure(numDescs, numLayers, numPerceptrons);
+
+
+  // activation function
+  getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
+  ier = sscanf(nextLine, "%s", name);
+  if (ier != 1) {
+    sprintf(errorMsg, "unable to read activation function from line:\n");
+    strcat(errorMsg, nextLine);
+    ier = KIM_STATUS_FAIL;
+    pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+    fclose(parameterFilePointers[0]);
+    return ier;
+  }
+  network_->set_activation(name);
+
+
+  // weights and biases
+  for (int i=0; i<numLayers; i++) {
+
+    // weights
+    int row;
+    int col;
+    if (i==0) {
+      row = numDescs;
+      col = numPerceptrons[i];
+    } else {
+      row = numPerceptrons[i-1];
+      col = numPerceptrons[i];
+    }
+
+    AllocateAndInitialize2DArray(weight, row, col);
+    for (int j=0; j<row; j++) {
+      getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
+      ier = getXdouble(nextLine, col, weight[j]);
+      if (ier != KIM_STATUS_OK) {
+        sprintf(errorMsg, "unable to read weight from line:\n");
+        strcat(errorMsg, nextLine);
+        ier = KIM_STATUS_FAIL;
+        pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+        fclose(parameterFilePointers[0]);
+        return ier;
+      }
+    }
+
+    // bias
+    AllocateAndInitialize1DArray(bias, col);
+    getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
+    ier = getXdouble(nextLine, col, bias);
+    if (ier != KIM_STATUS_OK) {
+      sprintf(errorMsg, "unable to read bias from line:\n");
+      strcat(errorMsg, nextLine);
+      ier = KIM_STATUS_FAIL;
+      pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+      fclose(parameterFilePointers[0]);
+      return ier;
+    }
+
+    // copy to network class
+    network_->add_weight_bias(weight, bias, i);
+    Deallocate2DArray(weight);
+    Deallocate1DArray(bias);
+  }
+
+
+  delete numPerceptrons;
+
+
+
+  network_->echo_input();
 exit(1);
 
 
@@ -538,14 +647,35 @@ void ANNImplementation::getNextDataLine(
 }
 
 //******************************************************************************
-int ANNImplementation::getXdouble(char* linePtr, double const N, double* list)
+int ANNImplementation::getXdouble(char* linePtr, const int N, double* list)
 {
   int ier;
   char * pch;
 
   pch = strtok(linePtr, " \t");
   for (int i=0; i<N; i++) {
-    ier = sscanf(pch, "%lf ", &list[i]);
+    ier = sscanf(pch, "%lf", &list[i]);
+    if (ier != 1) {
+      ier = KIM_STATUS_FAIL;
+      return ier;
+    }
+    pch = strtok(NULL, " \t");
+  }
+
+  ier = KIM_STATUS_OK;
+  return ier;
+}
+
+
+//******************************************************************************
+int ANNImplementation::getXint(char* linePtr, const int N, int* list)
+{
+  int ier;
+  char * pch;
+
+  pch = strtok(linePtr, " \t");
+  for (int i=0; i<N; i++) {
+    ier = sscanf(pch, "%d", &list[i]);
     if (ier != 1) {
       ier = KIM_STATUS_FAIL;
       return ier;

@@ -36,7 +36,7 @@ MODEL_DRIVER_NAME := Artificial_Neural_Network__MD_000000111111_000
 MODEL_DRIVER_KIM_FILE_TEMPLATE := ANN.kim.tpl
 MODEL_DRIVER_INIT_FUNCTION_NAME := model_driver_init
 
-LOCALOBJ = ANN.o ANNImplementation.o descriptor.o helper.o
+LOCALOBJ = ANN.o ANNImplementation.o descriptor.o network.o helper.o
 
 ANN.o: ANN.hpp ANNImplementation.hpp
 ANNImplementation.o: ANNImplementation.hpp
@@ -46,6 +46,7 @@ ANNImplementationComputeDispatch.cpp: CreateDispatch.sh
 	@./CreateDispatch.sh
 	@printf "Creating... $@.\n"
 descriptor.o: descriptor.h descriptor.cpp
+network.o: network.h network.cpp
 helper.o: helper.h helper.cpp
 
 LOCALCLEAN = ANNImplementationComputeDispatch.cpp
@@ -53,7 +54,7 @@ LOCALCLEAN = ANNImplementationComputeDispatch.cpp
 # APPEND to compiler option flag lists
 #FFLAGS   +=
 #CFLAGS   +=
-#CXXFLAGS +=
+CXXFLAGS += -std=c++11 -I ~/Applications/eigen
 #LDFLAGS  +=
 
 # load remaining KIM make configuration

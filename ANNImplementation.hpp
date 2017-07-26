@@ -33,6 +33,7 @@
 #include "KIM_API_status.h"
 #include "ANN.hpp"
 #include "descriptor.h"
+#include "network.h"
 #include "helper.h"
 
 #define DIM 3
@@ -208,6 +209,7 @@ class ANNImplementation
 
 	// descriptor;
 	Descriptor* descriptor_;
+	NeuralNetwork* network_;
 
 
 
@@ -232,7 +234,8 @@ class ANNImplementation
       int const numberParameterFiles);
   void getNextDataLine(FILE* const filePtr, char* const nextLine,
                        int const maxSize, int* endOfFileFlag);
-  int getXdouble(char* linePtr, double const N, double* list);
+  int getXdouble(char* linePtr, const int N, double* list);
+  int getXint(char* linePtr, const int N, int* list);
   int ConvertUnits(KIM_API_model* const pkim);
   int RegisterKIMParameters(KIM_API_model* const pkim) const;
   int RegisterKIMFunctions(KIM_API_model* const pkim) const;
