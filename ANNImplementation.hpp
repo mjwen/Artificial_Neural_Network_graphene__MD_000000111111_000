@@ -30,8 +30,10 @@
 #ifndef ANN_IMPLEMENTATION_HPP_
 #define ANN_IMPLEMENTATION_HPP_
 
-#include "ANN.hpp"
 #include "KIM_API_status.h"
+#include "ANN.hpp"
+#include "descriptor.h"
+#include "helper.h"
 
 #define DIM 3
 #define ONE 1.0
@@ -113,14 +115,6 @@ class LocatorIterator
     return ier;
   }
 };
-
-
-
-// helper routine declarations
-void AllocateAndInitialize2DArray(double**& arrayPtr, int const extentZero,
-                                  int const extentOne);
-void Deallocate2DArray(double**& arrayPtr);
-
 
 
 //==============================================================================
@@ -212,8 +206,12 @@ class ANNImplementation
   int cachedNumberOfParticles_;
   int cachedNumberContributingParticles_;
 
+	// descriptor;
+	Descriptor* descriptor_;
 
-  // Helper methods
+
+
+	// Helper methods
   //
   //
   // Related to constructor
@@ -234,6 +232,7 @@ class ANNImplementation
       int const numberParameterFiles);
   void getNextDataLine(FILE* const filePtr, char* const nextLine,
                        int const maxSize, int* endOfFileFlag);
+  int getXdouble(char* linePtr, double const N, double* list);
   int ConvertUnits(KIM_API_model* const pkim);
   int RegisterKIMParameters(KIM_API_model* const pkim) const;
   int RegisterKIMFunctions(KIM_API_model* const pkim) const;
@@ -274,6 +273,8 @@ class ANNImplementation
               double* const energy,
               VectorOfSizeDIM* const forces,
               double* const particleEnergy);
+
+
 };
 
 //==============================================================================

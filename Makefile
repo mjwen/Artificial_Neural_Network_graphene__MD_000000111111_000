@@ -36,7 +36,7 @@ MODEL_DRIVER_NAME := Artificial_Neural_Network__MD_000000111111_000
 MODEL_DRIVER_KIM_FILE_TEMPLATE := ANN.kim.tpl
 MODEL_DRIVER_INIT_FUNCTION_NAME := model_driver_init
 
-LOCALOBJ = ANN.o ANNImplementation.o
+LOCALOBJ = ANN.o ANNImplementation.o descriptor.o helper.o
 
 ANN.o: ANN.hpp ANNImplementation.hpp
 ANNImplementation.o: ANNImplementation.hpp
@@ -45,6 +45,8 @@ ANNImplementation.o: ANNImplementation.hpp \
 ANNImplementationComputeDispatch.cpp: CreateDispatch.sh
 	@./CreateDispatch.sh
 	@printf "Creating... $@.\n"
+descriptor.o: descriptor.h descriptor.cpp
+helper.o: helper.h helper.cpp
 
 LOCALCLEAN = ANNImplementationComputeDispatch.cpp
 

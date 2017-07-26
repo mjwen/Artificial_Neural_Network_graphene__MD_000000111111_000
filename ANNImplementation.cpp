@@ -33,9 +33,11 @@
 #include <fstream>
 #include <iostream>
 
+#include "KIM_API_status.h"
 #include "ANN.hpp"
 #include "ANNImplementation.hpp"
-#include "KIM_API_status.h"
+#include "descriptor.h"
+#include "helper.h"
 
 #define MAXLINE 1024
 #define IGNORE_RESULT(fn) if(fn){}
@@ -76,6 +78,9 @@ ANNImplementation::ANNImplementation(
 
 
 {
+	// create descriptor class
+	descriptor_ = new Descriptor();
+
   *ier = SetConstantValues(pkim);
   if (*ier < KIM_STATUS_OK) return;
 
@@ -274,24 +279,98 @@ int ANNImplementation::ProcessParameterFiles(
   //int N;
   int endOfFileFlag = 0;
   char nextLine[MAXLINE];
-  //char spec1[MAXLINE], spec2[MAXLINE];
-  char *nextLinePtr;
-  //int iIndex, jIndex , indx, iiIndex, jjIndex;
-  //double nextCutoff;
-  nextLinePtr = nextLine;
+  char errorMsg[MAXLINE];
+  char name[MAXLINE];
 	double cutoff;
 
+	int numDescTypes;
+	int numParams;
+	int numParamSets;
+	double** descParams;
+	//char spec1[MAXLINE], spec2[MAXLINE];
+  //int iIndex, jIndex , indx, iiIndex, jjIndex;
+  //double nextCutoff;
+
 	// cutoff
-  getNextDataLine(parameterFilePointers[0], nextLinePtr, MAXLINE, &endOfFileFlag);
-  ier = sscanf(nextLine, "%lf", &cutoff);
-  if (ier != 1) {
-    sprintf(nextLine, "unable to read first line of the parameter file");
+  getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
+  ier = sscanf(nextLine, "%s %lf", name, &cutoff);
+  if (ier != 2) {
+    sprintf(errorMsg, "unable to read cutoff from line:\n");
+    strcat(errorMsg, nextLine);
     ier = KIM_STATUS_FAIL;
-    pkim->report_error(__LINE__, __FILE__, nextLine, ier);
+    pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
     fclose(parameterFilePointers[0]);
     return ier;
   }
+	descriptor_->set_cutfunc(name);
 	cutoffs_[0] = cutoff;
+
+	// descriptor
+  getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
+  ier = sscanf(nextLine, "%d", &numDescTypes);
+  if (ier != 1) {
+    sprintf(errorMsg, "unable to read number of descriptor types from line:\n");
+    strcat(errorMsg, nextLine);
+    ier = KIM_STATUS_FAIL;
+    pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+    fclose(parameterFilePointers[0]);
+    return ier;
+  }
+
+  // descriptor
+  for (int i=0; i<numDescTypes; i++) {
+    // descriptor name and parameter dimensions
+    getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
+    ier = sscanf(nextLine, "%s %d %d", name, &numParamSets, &numParams);
+    if (ier != 3) {
+      sprintf(errorMsg, "unable to read descriptor from line:\n");
+      strcat(errorMsg, nextLine);
+      ier = KIM_STATUS_FAIL;
+      pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+      fclose(parameterFilePointers[0]);
+      return ier;
+    }
+
+    // check size of params is correct w.r.t its name
+    if (strcmp(name, "G2") == 0 && numParams != 2) {
+      sprintf(errorMsg, "number of params for descriptor G2 is incorrect, "
+                        "expecting 2, but given is %d.\n", numParams);
+      ier = KIM_STATUS_FAIL;
+      pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+      fclose(parameterFilePointers[0]);
+      return ier;
+    }
+
+    // read descriptor params
+    AllocateAndInitialize2DArray(descParams, numParamSets, numParams);
+    for (int j=0; j<numParamSets; j++) {
+      getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
+      ier = getXdouble(nextLine, numParams, descParams[j]);
+      if (ier != KIM_STATUS_OK) {
+        sprintf(errorMsg, "unable to read descriptor parameters from line:\n");
+        strcat(errorMsg, nextLine);
+        ier = KIM_STATUS_FAIL;
+        pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+        fclose(parameterFilePointers[0]);
+        return ier;
+      }
+
+    }
+
+
+//TODO delete
+    std::cout<<"flag params"<<std::endl;
+    for (int m=0; m<numParamSets; m++) {
+      for (int n=0; n<numParams; n++) {
+        std::cout<<descParams[m][n]<< " ";
+      }
+      std::cout<<std::endl;
+    }
+
+  }
+
+
+exit(1);
 
 
 
@@ -444,6 +523,26 @@ void ANNImplementation::getNextDataLine(
     }
   }
   while ((strncmp("#", nextLinePtr, 1) == 0) || (strlen(nextLinePtr) == 0));
+}
+
+//******************************************************************************
+int ANNImplementation::getXdouble(char* linePtr, double const N, double* list)
+{
+  int ier;
+  char * pch;
+
+  pch = strtok(linePtr, " \t");
+  for (int i=0; i<N; i++) {
+    ier = sscanf(pch, "%lf ", &list[i]);
+    if (ier != 1) {
+      ier = KIM_STATUS_FAIL;
+      return ier;
+    }
+    pch = strtok(NULL, " \t");
+  }
+
+  ier = KIM_STATUS_OK;
+  return ier;
 }
 
 //******************************************************************************
@@ -778,40 +877,3 @@ int ANNImplementation::GetComputeIndex(
   return index;
 }
 
-
-//==============================================================================
-//
-// Implementation of helper functions
-//
-//==============================================================================
-
-//******************************************************************************
-void AllocateAndInitialize2DArray(double**& arrayPtr, int const extentZero,
-                                  int const extentOne)
-{ // allocate memory and set pointers
-  arrayPtr = new double*[extentZero];
-  arrayPtr[0] = new double[extentZero * extentOne];
-  for (int i = 1; i < extentZero; ++i)
-  {
-    arrayPtr[i] = arrayPtr[i-1] + extentOne;
-  }
-
-  // initialize
-  for (int i = 0; i < extentZero; ++i)
-  {
-    for (int j = 0; j < extentOne; ++j)
-    {
-      arrayPtr[i][j] = 0.0;
-    }
-  }
-}
-
-//******************************************************************************
-void Deallocate2DArray(double**& arrayPtr)
-{ // deallocate memory
-  if (arrayPtr != 0) delete [] arrayPtr[0];
-  delete [] arrayPtr;
-
-  // nullify pointer
-  arrayPtr = 0;
-}
