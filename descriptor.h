@@ -25,11 +25,32 @@ class Descriptor
 		void set_cutfunc(char* name);
 		void add_descriptor(char* name, double** values, int row, int col);
 
+    int get_num_descriptors();
+
 		// symmetry functions
     double sym_g2(double r, double rcut, double eta, double Rs);
     double sym_d_g2(double r, double rcut, double eta, double Rs);
     double sym_g3(double r, double rcut, double kappa);
     double sym_d_g3(double r, double rcut, double kappa);
+
+
+//TODO delete; for debug purpose
+    void echo_input() {
+      std::cout<<"====================================="<<std::endl;
+      for (size_t i=0; i<desc_name.size(); i++) {
+        int rows = num_param_sets.at(i);
+        int cols = num_params.at(i);
+        std::cout<<"name: "<<desc_name.at(i)<<", rows: "<<rows<<", cols: "<<cols<<std::endl;
+        for (int m=0; m<rows; m++) {
+          for (int n=0; n<cols; n++) {
+            std::cout<<desc_params.at(i)[m][n]<< " ";
+          }
+          std::cout<<std::endl;
+        }
+        std::cout<<std::endl;
+      }
+    }
+
 
 	private:
 		CutoffFunction cutoff;

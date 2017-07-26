@@ -33,18 +33,20 @@ void Deallocate2DArray(double**& arrayPtr) {
 	arrayPtr = 0;
 }
 
-
-
-//TODO delete
-void print_mat(double** mat, int rows, int cols) {
-  for (int m=0; m<rows; m++) {
-    for (int n=0; n<cols; n++) {
-      std::cout<<mat[m][n]<< " ";
-    }
-    std::cout<<std::endl;
+// allocate memory and set pointers
+void AllocateAndInitialize1DArray(double*& arrayPtr, int const extent)
+{
+  arrayPtr = new double[extent];
+  for (int i = 0; i < extent; ++i) {
+    arrayPtr[i] = 0.0;
   }
-  std::cout<<std::endl;
 }
 
+// deallocate memory
+void Deallocate1DArray(double*& arrayPtr) {
+	if (arrayPtr != 0) delete [] arrayPtr;
+	// nullify pointer
+	arrayPtr = 0;
+}
 
 
