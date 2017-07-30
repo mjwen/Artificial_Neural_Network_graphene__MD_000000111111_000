@@ -120,8 +120,8 @@ ANNImplementation::ANNImplementation(
 ANNImplementation::~ANNImplementation()
 { // note: it is ok to delete a null pointer and we have ensured that
   // everything is initialized to null
-
   delete [] cutoffs_;
+  Deallocate2DArray(cutoffsSq2D_);
 }
 
 //******************************************************************************
@@ -630,6 +630,8 @@ void ANNImplementation::getNextDataLine(
     FILE* const filePtr, char* nextLinePtr, int const maxSize,
     int *endOfFileFlag)
 {
+  char* pch;
+
   do
   {
     if(fgets(nextLinePtr, maxSize, filePtr) == NULL)
@@ -644,6 +646,13 @@ void ANNImplementation::getNextDataLine(
     }
   }
   while ((strncmp("#", nextLinePtr, 1) == 0) || (strlen(nextLinePtr) == 0));
+
+  // remove comments starting with `#' in a line
+  pch = strchr(nextLinePtr, '#');
+  if (pch != NULL) {
+    *pch = '\0';
+  }
+
 }
 
 //******************************************************************************
@@ -651,15 +660,23 @@ int ANNImplementation::getXdouble(char* linePtr, const int N, double* list)
 {
   int ier;
   char * pch;
+  char line[MAXLINE];
+  int i = 0;
 
-  pch = strtok(linePtr, " \t");
-  for (int i=0; i<N; i++) {
+  strcpy(line, linePtr);
+  pch = strtok(line, " \t");
+  while (pch != NULL) {
     ier = sscanf(pch, "%lf", &list[i]);
     if (ier != 1) {
       ier = KIM_STATUS_FAIL;
       return ier;
     }
     pch = strtok(NULL, " \t");
+    i += 1;
+  }
+  if (i != N) {
+    ier = KIM_STATUS_FAIL;
+    return ier;
   }
 
   ier = KIM_STATUS_OK;
@@ -672,15 +689,23 @@ int ANNImplementation::getXint(char* linePtr, const int N, int* list)
 {
   int ier;
   char * pch;
+  char line[MAXLINE];
+  int i = 0;
 
-  pch = strtok(linePtr, " \t");
-  for (int i=0; i<N; i++) {
+  strcpy(line, linePtr);
+  pch = strtok(line, " \t");
+  while (pch != NULL) {
     ier = sscanf(pch, "%d", &list[i]);
     if (ier != 1) {
       ier = KIM_STATUS_FAIL;
       return ier;
     }
     pch = strtok(NULL, " \t");
+    i += 1;
+  }
+  if (i != N) {
+    ier = KIM_STATUS_FAIL;
+    return ier;
   }
 
   ier = KIM_STATUS_OK;
