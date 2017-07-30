@@ -9,8 +9,11 @@
 
 using namespace Eigen;
 
+// typedef function pointer
 typedef Matrix<double, Dynamic, Dynamic, RowMajor> RowMatrixXd;
-typedef void(*ActivationFunction) (double x, double &y);
+
+typedef  RowMatrixXd(*ActivationFunction) (RowMatrixXd const& x);
+typedef  RowMatrixXd(*ActivationFunctionDerivative) (RowMatrixXd const& x);
 
 
 class NeuralNetwork
@@ -19,23 +22,26 @@ class NeuralNetwork
     NeuralNetwork();
     ~NeuralNetwork();
 
-    void set_nn_structure(int size_input, int num_layers, int* num_perceptrons);
+    void set_nn_structure(int input_size, int num_layers, int* layer_sizes);
     void set_activation(char* name);
     void add_weight_bias(double** weight, double* bias, int layer);
-    double forward(const double ** zeta, double* atom_energy);
-    void backward(const double *** dzetadr);
+    void forward(double * zeta, const int rows, const int cols);
+    void backward(double* dEdzeta, const int rows, const int cols);
 
+    double reduce_sum_output() {
+      return activOutputLayer_.sum();
+    }
 
 
 //TODO maybe delete,  for debug purpose delete
     void echo_input() {
       std::cout<<"==================================="<<std::endl;
       std::cout<<"Input data for class NeuralNetwork"<<std::endl;
-      std::cout<<"Ninput_: "<<Ninput_<<std::endl;
+      std::cout<<"inputSize_: "<<inputSize_<<std::endl;
       std::cout<<"Nlayers_: "<<Nlayers_<<std::endl;
       std::cout<<"Nperceptrons_: ";
-      for (size_t i=0; i<Nperceptrons_.size(); i++) {
-        std::cout<< Nperceptrons_.at(i) <<" ";
+      for (size_t i=0; i<layerSizes_.size(); i++) {
+        std::cout<< layerSizes_.at(i) <<" ";
       }
       std::cout<<std::endl;
 
@@ -52,12 +58,16 @@ class NeuralNetwork
 
 
   private:
-    int Ninput_;         // size of input layer
-    int Nlayers_;        // number of layers, including output
-    std::vector<int> Nperceptrons_;  // number of perceptrons in each layer
-    ActivationFunction act_;
+    int inputSize_;         // size of input layer
+    int Nlayers_;           // number of layers, including output, excluding input
+    std::vector<int> layerSizes_;  // number of perceptrons in each layer
+    ActivationFunction activFunc_;
+    ActivationFunctionDerivative activFuncDeriv_;
     std::vector<RowMatrixXd> weights_;
     std::vector<RowVectorXd> biases_;
+    std::vector<RowVectorXd> preactiv_;
+    RowMatrixXd activOutputLayer_;
+    RowVectorXd delta_;
     RowMatrixXd dEdzeta_;
 
 
@@ -65,15 +75,13 @@ class NeuralNetwork
 };
 
 
-inline void tanh(double x, double &y) {
-  y = (1 - exp(-2*x)) / (1 + exp(-2*x));
-}
-
-
-inline void relu(double x, double &y) {
-//TODO
-}
-
+// activation fucntion and derivatives
+RowMatrixXd relu(RowMatrixXd const& x);
+RowMatrixXd relu_derivative(RowMatrixXd const& x);
+RowMatrixXd tanh(RowMatrixXd const& x);
+RowMatrixXd tanh_derivative(RowMatrixXd const& x);
+RowMatrixXd sigmoid(RowMatrixXd const& x);
+RowMatrixXd sigmoid_derivative(RowMatrixXd const& x);
 
 
 #endif // NETWORK_H_
