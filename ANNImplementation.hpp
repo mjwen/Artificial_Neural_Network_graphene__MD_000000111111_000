@@ -236,6 +236,7 @@ class ANNImplementation
                        int const maxSize, int* endOfFileFlag);
   int getXdouble(char* linePtr, const int N, double* list);
   int getXint(char* linePtr, const int N, int* list);
+  void lowerCase(char* linePtr);
   int ConvertUnits(KIM_API_model* const pkim);
   int RegisterKIMParameters(KIM_API_model* const pkim) const;
   int RegisterKIMFunctions(KIM_API_model* const pkim) const;
@@ -356,11 +357,9 @@ int ANNImplementation::Compute(
     { // adjust index of particle neighbor
       int const j = n1Atom[jj] + baseConvert;
       int const jSpecies = particleSpecies[j];
-      double* r_ij;
-      double r_ijValue[DIM];
+      double r_ij[DIM];
 
 			// Compute r_ij
-			r_ij = r_ijValue;
 			for (int k = 0; k < DIM; ++k) {
 				r_ij[k] = coordinates[j][k] - coordinates[i][k];
 			}
@@ -371,10 +370,6 @@ int ANNImplementation::Compute(
       if (rij2 <= constCutoffsSq2D[iSpecies][jSpecies])
       { // compute contribution to energy, force, etc.
         double phi = 0.0;
-      //  double dphiByR = 0.0;
-      //  double d2phi = 0.0;
-      //  double dEidrByR = 0.0;
-      //  double d2Eidr2 = 0.0;
 
         // Compute pair potential and its derivatives
         if ((isComputeProcess_dEdr == true) || (isComputeForces == true))

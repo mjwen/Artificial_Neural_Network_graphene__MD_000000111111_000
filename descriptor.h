@@ -10,6 +10,7 @@
 
 #define MY_PI 3.1415926535897932
 
+// Symmetry functions taken from:
 
 typedef double (*CutoffFunction)(double r, double rcut);
 typedef double (*dCutoffFunction)(double r, double rcut);
@@ -18,6 +19,13 @@ typedef double (*dCutoffFunction)(double r, double rcut);
 class Descriptor
 {
   public:
+
+		std::vector<std::string> desc_name; // name of each descriptor
+		std::vector<double**> desc_params;  // params of each descriptor
+		std::vector<int> num_param_sets;    // number of parameter sets of each descriptor
+		std::vector<int> num_params;        // size of parameters of each descriptor
+    bool has_three_body;
+
     Descriptor();
 		~Descriptor();
 
@@ -28,10 +36,22 @@ class Descriptor
     int get_num_descriptors();
 
 		// symmetry functions
-    double sym_g2(double r, double rcut, double eta, double Rs);
-    double sym_d_g2(double r, double rcut, double eta, double Rs);
-    double sym_g3(double r, double rcut, double kappa);
-    double sym_d_g3(double r, double rcut, double kappa);
+    void sym_g1(double r, double rcut, double &phi);
+    void sym_g2(double eta, double Rs, double r, double rcut, double &phi);
+    void sym_g3(double kappa, double r, double rcut, double &phi);
+    void sym_g4(double zeta, double lambda, double eta,
+        const double* r, const double* rcut, double &phi);
+    void sym_g5(double zeta, double lambda, double eta,
+        const double* r, const double* rcut, double &phi);
+
+    void sym_d_g1(double r, double rcut, double &phi, double &dphi);
+    void sym_d_g2(double eta, double Rs, double r, double rcut, double &phi,
+        double &dphi);
+    void sym_d_g3(double kappa, double r, double rcut, double &phi, double &dphi);
+    void sym_d_g4(double zeta, double lambda, double eta,
+        const double* r, const double* rcut, double &phi, double* const dphi);
+    void sym_d_g5(double zeta, double lambda, double eta,
+        const double* r, const double* rcut, double &phi, double* const dphi);
 
 
 //TODO delete; for debug purpose
@@ -55,10 +75,6 @@ class Descriptor
 	private:
 		CutoffFunction cutoff;
 		dCutoffFunction d_cutoff;
-		std::vector<std::string> desc_name; // name of each descriptor
-		std::vector<double**> desc_params;  // params of each descriptor
-		std::vector<int> num_param_sets;    // number of parameter sets of each descriptor
-		std::vector<int> num_params;        // size of parameters of each descriptor
 };
 
 

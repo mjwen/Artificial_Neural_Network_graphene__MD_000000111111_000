@@ -289,7 +289,7 @@ int ANNImplementation::ProcessParameterFiles(
 	int numDescs;
 	int numParams;
 	int numParamSets;
-	double** descParams;
+	double** descParams = nullptr;
 
   // network
   int numLayers;
@@ -312,6 +312,23 @@ int ANNImplementation::ProcessParameterFiles(
     fclose(parameterFilePointers[0]);
     return ier;
   }
+  // change to lower case name
+  lowerCase(name);
+
+  if (strcmp(name, "cos") != 0
+      && strcmp(name, "exp") != 0
+      && strcmp(name, "tanh") != 0)
+  {
+    sprintf(errorMsg, "unsupported cutoff type. Expecting `cos', `exp' or "
+        "`tanh', given %s.\n", name);
+    ier = KIM_STATUS_FAIL;
+    pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+    fclose(parameterFilePointers[0]);
+
+
+  }
+
+
 	descriptor_->set_cutfunc(name);
 	cutoffs_[0] = cutoff;
 
@@ -331,8 +348,10 @@ int ANNImplementation::ProcessParameterFiles(
   for (int i=0; i<numDescTypes; i++) {
     // descriptor name and parameter dimensions
     getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
-    ier = sscanf(nextLine, "%s %d %d", name, &numParamSets, &numParams);
-    if (ier != 3) {
+
+    // name of descriptor
+    ier = sscanf(nextLine, "%s", name);
+    if (ier != 1) {
       sprintf(errorMsg, "unable to read descriptor from line:\n");
       strcat(errorMsg, nextLine);
       ier = KIM_STATUS_FAIL;
@@ -340,59 +359,97 @@ int ANNImplementation::ProcessParameterFiles(
       fclose(parameterFilePointers[0]);
       return ier;
     }
-
-    // check size of params is correct w.r.t its name
-    if (strcmp(name, "G2") == 0) {
-      if (numParams != 2) {
-        sprintf(errorMsg, "number of params for descriptor G2 is incorrect, "
-            "expecting 2, but given %d.\n", numParams);
-        ier = KIM_STATUS_FAIL;
-        pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
-        fclose(parameterFilePointers[0]);
-        return ier;
-      }
+    lowerCase(name); // change to lower case name
+    if (strcmp(name, "g1") == 0) {  // G1
+      descriptor_->add_descriptor(name, nullptr, 1, 0);
     }
-    else if (strcmp(name, "G3") == 0) {
-      if (numParams != 1) {
-        sprintf(errorMsg, "number of params for descriptor G3 is incorrect, "
-            "expecting 1, but given %d.\n", numParams);
-        ier = KIM_STATUS_FAIL;
-        pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
-        fclose(parameterFilePointers[0]);
-        return ier;
-      }
-    }
-    else {
-      sprintf(errorMsg, "unsupported descriptor `%s' from line:\n", name);
-      strcat(errorMsg, nextLine);
-      ier = KIM_STATUS_FAIL;
-      pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
-      fclose(parameterFilePointers[0]);
-      return ier;
-    }
-
-    // read descriptor params
-    AllocateAndInitialize2DArray(descParams, numParamSets, numParams);
-    for (int j=0; j<numParamSets; j++) {
-      getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
-      ier = getXdouble(nextLine, numParams, descParams[j]);
-      if (ier != KIM_STATUS_OK) {
-        sprintf(errorMsg, "unable to read descriptor parameters from line:\n");
+    else{
+      // re-read name, and read number of param sets and number of params
+      ier = sscanf(nextLine, "%s %d %d", name, &numParamSets, &numParams);
+      if (ier != 3) {
+        sprintf(errorMsg, "unable to read descriptor from line:\n");
         strcat(errorMsg, nextLine);
         ier = KIM_STATUS_FAIL;
         pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
         fclose(parameterFilePointers[0]);
         return ier;
       }
-    }
+      // change name to lower case
+      lowerCase(name);
 
-    // copy data to Descriptor
-    descriptor_->add_descriptor(name, descParams, numParamSets, numParams);
-    Deallocate2DArray(descParams);
+      // check size of params is correct w.r.t its name
+      if (strcmp(name, "g2") == 0) {
+        if (numParams != 2) {
+          sprintf(errorMsg, "number of params for descriptor G2 is incorrect, "
+              "expecting 2, but given %d.\n", numParams);
+          ier = KIM_STATUS_FAIL;
+          pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+          fclose(parameterFilePointers[0]);
+          return ier;
+        }
+      }
+      else if (strcmp(name, "g3") == 0) {
+        if (numParams != 1) {
+          sprintf(errorMsg, "number of params for descriptor G3 is incorrect, "
+              "expecting 1, but given %d.\n", numParams);
+          ier = KIM_STATUS_FAIL;
+          pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+          fclose(parameterFilePointers[0]);
+          return ier;
+        }
+      }
+      else if (strcmp(name, "g4") == 0) {
+        if (numParams != 3) {
+          sprintf(errorMsg, "number of params for descriptor G4 is incorrect, "
+              "expecting 3, but given %d.\n", numParams);
+          ier = KIM_STATUS_FAIL;
+          pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+          fclose(parameterFilePointers[0]);
+          return ier;
+        }
+      }
+      else if (strcmp(name, "g5") == 0) {
+        if (numParams != 3) {
+          sprintf(errorMsg, "number of params for descriptor G5 is incorrect, "
+              "expecting 3, but given %d.\n", numParams);
+          ier = KIM_STATUS_FAIL;
+          pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+          fclose(parameterFilePointers[0]);
+          return ier;
+        }
+      }
+      else {
+        sprintf(errorMsg, "unsupported descriptor `%s' from line:\n", name);
+        strcat(errorMsg, nextLine);
+        ier = KIM_STATUS_FAIL;
+        pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+        fclose(parameterFilePointers[0]);
+        return ier;
+      }
+
+      // read descriptor params
+      AllocateAndInitialize2DArray(descParams, numParamSets, numParams);
+      for (int j=0; j<numParamSets; j++) {
+        getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
+        ier = getXdouble(nextLine, numParams, descParams[j]);
+        if (ier != KIM_STATUS_OK) {
+          sprintf(errorMsg, "unable to read descriptor parameters from line:\n");
+          strcat(errorMsg, nextLine);
+          ier = KIM_STATUS_FAIL;
+          pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+          fclose(parameterFilePointers[0]);
+          return ier;
+        }
+      }
+
+      // copy data to Descriptor
+      descriptor_->add_descriptor(name, descParams, numParamSets, numParams);
+      Deallocate2DArray(descParams);
+    }
   }
+
 //TODO delete
   descriptor_->echo_input();
-
 
   // network structure
   // number of layers
@@ -710,6 +767,14 @@ int ANNImplementation::getXint(char* linePtr, const int N, int* list)
 
   ier = KIM_STATUS_OK;
   return ier;
+}
+
+//******************************************************************************
+void ANNImplementation::lowerCase(char* linePtr)
+{
+  for(int i=0; linePtr[i]; i++){
+    linePtr[i] = tolower(linePtr[i]);
+  }
 }
 
 //******************************************************************************
