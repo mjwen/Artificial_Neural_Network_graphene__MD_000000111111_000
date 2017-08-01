@@ -26,10 +26,18 @@ class NeuralNetwork
     void set_activation(char* name);
     void add_weight_bias(double** weight, double* bias, int layer);
     void forward(double * zeta, const int rows, const int cols);
-    void backward(double* dEdzeta, const int rows, const int cols);
+    void backward();
 
-    double reduce_sum_output() {
+    double get_sum_output() {
       return activOutputLayer_.sum();
+    }
+
+    double* get_output() {
+      return activOutputLayer_.data();
+    }
+
+    double* get_grad_input() {
+      return gradInput_.data();
     }
 
 
@@ -50,9 +58,6 @@ class NeuralNetwork
         std::cout<<"w_"<<i<<std::endl<<weights_.at(i)<<std::endl;
         std::cout<<"b_"<<i<<std::endl<<biases_.at(i)<<std::endl;
       }
-
-
-
     }
 
 
@@ -68,7 +73,7 @@ class NeuralNetwork
     std::vector<RowMatrixXd> preactiv_;
     RowMatrixXd activOutputLayer_;
     RowVectorXd delta_;
-    RowMatrixXd dEdzeta_;
+    RowMatrixXd gradInput_;
 
 
 

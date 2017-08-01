@@ -305,6 +305,8 @@ int ANNImplementation::Compute(
     double* const particleEnergy)
 {
   int ier = KIM_STATUS_OK;
+  const int Nparticles = cachedNumberOfParticles_;
+  const int Ncontrib = cachedNumberContributingParticles_;
 
   if ((isComputeEnergy == false) &&
       (isComputeParticleEnergy == false) &&
@@ -318,20 +320,24 @@ int ANNImplementation::Compute(
     *energy = 0.0;
   }
   if (isComputeParticleEnergy == true) {
-    int const cachedNumParticles = cachedNumberOfParticles_;
-    for (int i = 0; i < cachedNumParticles; ++i) {
+    for (int i = 0; i < Nparticles; ++i) {
       particleEnergy[i] = 0.0;
     }
   }
   if (isComputeForces == true) {
-    int const cachedNumParticles = cachedNumberOfParticles_;
-    for (int i = 0; i < cachedNumParticles; ++i) {
+    for (int i = 0; i < Nparticles; ++i) {
       for (int j = 0; j < DIM; ++j)
         forces[i][j] = 0.0;
     }
   }
 
-  // calculate contribution from pair function
+  // setting up generalzied coords matrix and the derivative matrix
+  double** generalizedCoords;
+//  double*** dGeneralizedCoords;
+  int Ndescriptors = descriptor_->get_num_descriptors();
+  AllocateAndInitialize2DArray(generalizedCoords, Ncontrib, Ndescriptors);
+
+  // calculate generalized coordiantes
   //
   // Setup loop over contributing particles
   int ii = 0;
@@ -341,9 +347,8 @@ int ANNImplementation::Compute(
   int const baseConvert = baseconvert_;
 	double const* const* const  constCutoffsSq2D = cutoffsSq2D_;
 
-	for (Iter iterator(pkim, get_neigh, baseConvert,
-                     cachedNumberContributingParticles_, &ii, &numnei, &n1atom,
-                     &pRij);
+	for (Iter iterator(pkim, get_neigh, baseConvert, Ncontrib, &ii, &numnei,
+                     &n1atom, &pRij);
        iterator.done() == false;
        iterator.next(&ii, &numnei, &n1atom, &pRij))
   {
@@ -354,77 +359,279 @@ int ANNImplementation::Compute(
 
     // Setup loop over neighbors of current particle
     for (int jj = 0; jj < numNei; ++jj)
-    { // adjust index of particle neighbor
+    {
+      // adjust index of particle neighbor
       int const j = n1Atom[jj] + baseConvert;
       int const jSpecies = particleSpecies[j];
-      double r_ij[DIM];
+      double rij[DIM];
 
-			// Compute r_ij
-			for (int k = 0; k < DIM; ++k) {
-				r_ij[k] = coordinates[j][k] - coordinates[i][k];
+			// Compute rij
+			for (int dim = 0; dim < DIM; ++dim) {
+				rij[dim] = coordinates[j][dim] - coordinates[i][dim];
 			}
 
       // compute distance squared
-      double const rij2 = r_ij[0]*r_ij[0] + r_ij[1]*r_ij[1] + r_ij[2]*r_ij[2];
+      double const rijmag = sqrt(rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2]);
+      double const rcutij = sqrt(constCutoffsSq2D[iSpecies][jSpecies]);
 
-      if (rij2 <= constCutoffsSq2D[iSpecies][jSpecies])
-      { // compute contribution to energy, force, etc.
-        double phi = 0.0;
+      // if particles i and j not interact
+      if (rijmag > rcutij) continue;
 
-        // Compute pair potential and its derivatives
-        if ((isComputeProcess_dEdr == true) || (isComputeForces == true))
-        { // Compute dphi
-        }
+      int gc_index = 0;
 
-        if ((isComputeEnergy == true) || (isComputeParticleEnergy == true))
-        { // Compute phi
-        }
+      // two-body descriptors
+      for (size_t p=0; p<descriptor_->desc_name.size(); p++) {
+        for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
 
-        // Contribution to energy
-        if (isComputeEnergy == true) {
-					*energy += 0.5*phi;
-
-        }
-
-        // Contribution to particleEnergy
-        if (isComputeParticleEnergy == true)
-        {
-          particleEnergy[i] += 0.5*phi;
-        }
-
-        // Contribution to forces
-        if (isComputeForces == true) {
-/*          for (int k = 0; k < DIM; ++k) {
-            double const contrib = dEidrByR * r_ij_const[k];
-            forces[i][k] += contrib;
-            forces[j][k] -= contrib;
+          // select descriptor
+          double gc;
+          if (descriptor_->desc_name[p] == "g1") {
+            descriptor_->sym_g1(rijmag, rcutij, gc);
           }
-*/        }
-
-
-        // Call process_dEdr
-/*        if (isComputeProcess_dEdr == true) {
-          double const rij = sqrt(rij2);
-          double const dEidr = dEidrByR*rij;
-          ier = pkim->process_dEdr(const_cast<KIM_API_model**>(&pkim),
-                                   const_cast<double*>(&dEidr),
-                                   const_cast<double*>(&rij),
-                                   const_cast<double**>(&r_ij_const),
-                                   const_cast<int*>(&i),
-                                   const_cast<int*>(&j));
-          if (ier < KIM_STATUS_OK) {
-            pkim->report_error(__LINE__, __FILE__, "process_dEdr", ier);
-            return ier;
+          else if (descriptor_->desc_name[p] == "g2") {
+            double eta = descriptor_->desc_params[p][q][0];
+            double Rs = descriptor_->desc_params[p][q][1];
+            descriptor_->sym_g2(eta, Rs, rijmag, rcutij, gc);
           }
+          else if (descriptor_->desc_name[p] == "g3") {
+            double kappa = descriptor_->desc_params[p][q][0];
+            descriptor_->sym_g3(kappa, rijmag, rcutij, gc);
+          }
+
+
+          // generalized coords
+          generalizedCoords[i][gc_index] += gc;
+          gc_index += 1;
+
+        } //loop over same descriptor but different hyperparams
+      } // loop over descriptors
+
+
+      // three-body descriptors
+      if (descriptor_->has_three_body == false) continue;
+
+      for (int kk = jj+1; kk < numNei; ++kk) {
+
+        // adjust index of particle neighbor
+        int const k = n1Atom[kk] + baseConvert;
+        int const kSpecies = particleSpecies[k];
+
+        // Compute rik, rjk and their squares
+        double rik[DIM];
+        double rjk[DIM];
+        for (int dim = 0; dim < DIM; ++dim) {
+          rik[dim] = coordinates[k][dim] - coordinates[i][dim];
+          rjk[dim] = coordinates[k][dim] - coordinates[j][dim];
         }
-*/
+        double const rikmag = sqrt(rik[0]*rik[0] + rik[1]*rik[1] + rik[2]*rik[2]);
+        double const rjkmag = sqrt(rjk[0]*rjk[0] + rjk[1]*rjk[1] + rjk[2]*rjk[2]);
+        double const rcutik = constCutoffsSq2D[iSpecies][kSpecies];
+        double const rcutjk = constCutoffsSq2D[jSpecies][kSpecies];
 
+        double const rvec[3] = {rijmag, rikmag, rjkmag};
+        double const rcutvec[3] = {rcutij, rcutik, rcutjk};
 
+        if (rikmag > rcutik) continue; // three-dody not interacting
 
+        for (size_t p=0; p<descriptor_->desc_name.size(); p++) {
+          for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
 
-      }  // if particles i and j interact
+            double gc;
+            if (descriptor_->desc_name[p] == "g4") {
+              double zeta = descriptor_->desc_params[p][q][0];
+              double lambda = descriptor_->desc_params[p][q][1];
+              double eta = descriptor_->desc_params[p][q][2];
+              descriptor_->sym_g4(zeta, lambda, eta, rvec, rcutvec, gc);
+            }
+            else if (descriptor_->desc_name[p] == "g5") {
+              double zeta = descriptor_->desc_params[p][q][0];
+              double lambda = descriptor_->desc_params[p][q][1];
+              double eta = descriptor_->desc_params[p][q][2];
+              descriptor_->sym_g5(zeta, lambda, eta, rvec, rcutvec, gc);
+            }
+
+            generalizedCoords[i][gc_index] += gc;
+            gc_index += 1;
+
+          }  //loop over same descriptor but different hyperparams
+        }  // loop over descriptors
+      }  // loop over kk (three body neighbors)
+
     }  // end of first neighbor loop
   }  // end of loop over contributing particles
+
+
+
+  // NN feedforward
+  network_->forward(generalizedCoords[0], Ncontrib, Ndescriptors);
+  // NN backpropagation to compute derivative of energy w.r.t generalized coords
+  network_->backward();
+
+  // get access to derivatives of energy w.r.t generalized coords
+  double** dEdGeneralizedCoords;
+  int extentZero = Ncontrib;
+  int extentOne = Ndescriptors;
+  dEdGeneralizedCoords = new double*[extentZero];
+  dEdGeneralizedCoords[0] = network_->get_grad_input();
+  for (int i = 1; i < extentZero; ++i) {
+    dEdGeneralizedCoords[i] = dEdGeneralizedCoords[i-1] + extentOne;
+  }
+
+
+  // Contribution to energy
+  if (isComputeEnergy == true) {
+    *energy = network_->get_sum_output();
+  }
+
+  // Contribution to particle energy
+  if (isComputeParticleEnergy == true) {
+    double* Epart;
+    Epart = network_->get_output();
+    for (int i=0; i<Ncontrib; i++) {
+      particleEnergy[i] = Epart[i];
+    }
+  }
+
+
+  // Compute derivative of energy w.r.t coords
+  if ((isComputeProcess_dEdr == true) || (isComputeForces == true))
+  {
+
+    for (Iter iterator(pkim, get_neigh, baseConvert, Ncontrib, &ii, &numnei,
+                     &n1atom, &pRij);
+        iterator.done() == false;
+        iterator.next(&ii, &numnei, &n1atom, &pRij))
+    {
+      int const numNei = numnei;
+      int const * const n1Atom = n1atom;
+      int const i = ii;
+      int const iSpecies = particleSpecies[i];
+
+      // Setup loop over neighbors of current particle
+      for (int jj = 0; jj < numNei; ++jj)
+      {
+        // adjust index of particle neighbor
+        int const j = n1Atom[jj] + baseConvert;
+        int const jSpecies = particleSpecies[j];
+        double rij[DIM];
+
+        // Compute rij
+        for (int dim = 0; dim < DIM; ++dim) {
+          rij[dim] = coordinates[j][dim] - coordinates[i][dim];
+        }
+
+        // compute distance squared
+        double const rijmag = sqrt(rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2]);
+        double const rcutij = sqrt(constCutoffsSq2D[iSpecies][jSpecies]);
+
+        // if particles i and j not interact
+        if (rijmag > rcutij) continue;
+
+        int gc_index = 0;
+        double dgcdr_two;
+        // two-body descriptors
+        for (size_t p=0; p<descriptor_->desc_name.size(); p++) {
+          for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
+
+            // select descriptor
+            double gc;
+            if (descriptor_->desc_name[p] == "g1") {
+              descriptor_->sym_d_g1(rijmag, rcutij, gc, dgcdr_two);
+            }
+            else if (descriptor_->desc_name[p] == "g2") {
+              double eta = descriptor_->desc_params[p][q][0];
+              double Rs = descriptor_->desc_params[p][q][1];
+              descriptor_->sym_d_g2(eta, Rs, rijmag, rcutij, gc, dgcdr_two);
+            }
+            else if (descriptor_->desc_name[p] == "g3") {
+              double kappa = descriptor_->desc_params[p][q][0];
+              descriptor_->sym_d_g3(kappa, rijmag, rcutij, gc, dgcdr_two);
+            }
+
+            // forces
+            for (int kdim = 0; kdim < DIM; ++kdim) {
+              double phi = dEdGeneralizedCoords[i][gc_index]*dgcdr_two*rij[kdim]/rijmag;
+              forces[i][kdim] += phi;
+              forces[j][kdim] -= phi;
+            }
+
+            // get to next generalized coords symmetry function
+            gc_index += 1;
+
+          } //loop over same descriptor but different hyperparams
+        } // loop over descriptors
+
+
+        // three-body descriptors
+        if (descriptor_->has_three_body == false) continue;
+
+        for (int kk = jj+1; kk < numNei; ++kk) {
+
+          // adjust index of particle neighbor
+          int const k = n1Atom[kk] + baseConvert;
+          int const kSpecies = particleSpecies[k];
+
+          // Compute rik, rjk and their squares
+          double rik[DIM];
+          double rjk[DIM];
+          for (int dim = 0; dim < DIM; ++dim) {
+            rik[dim] = coordinates[k][dim] - coordinates[i][dim];
+            rjk[dim] = coordinates[k][dim] - coordinates[j][dim];
+          }
+          double const rikmag = sqrt(rik[0]*rik[0] + rik[1]*rik[1] + rik[2]*rik[2]);
+          double const rjkmag = sqrt(rjk[0]*rjk[0] + rjk[1]*rjk[1] + rjk[2]*rjk[2]);
+          double const rcutik = constCutoffsSq2D[iSpecies][kSpecies];
+          double const rcutjk = constCutoffsSq2D[jSpecies][kSpecies];
+
+          double const rvec[3] = {rijmag, rikmag, rjkmag};
+          double const rcutvec[3] = {rcutij, rcutik, rcutjk};
+
+          if (rikmag > rcutik) continue; // three-dody not interacting
+
+          for (size_t p=0; p<descriptor_->desc_name.size(); p++) {
+            for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
+
+              double gc;
+              double dgcdr_three[3];
+              if (descriptor_->desc_name[p] == "g4") {
+                double zeta = descriptor_->desc_params[p][q][0];
+                double lambda = descriptor_->desc_params[p][q][1];
+                double eta = descriptor_->desc_params[p][q][2];
+                descriptor_->sym_d_g4(zeta, lambda, eta, rvec, rcutvec, gc, dgcdr_three);
+              }
+              else if (descriptor_->desc_name[p] == "g5") {
+                double zeta = descriptor_->desc_params[p][q][0];
+                double lambda = descriptor_->desc_params[p][q][1];
+                double eta = descriptor_->desc_params[p][q][2];
+                descriptor_->sym_d_g5(zeta, lambda, eta, rvec, rcutvec, gc, dgcdr_three);
+              }
+
+              // forces
+              for (int kdim = 0; kdim < DIM; ++kdim) {
+                double phi_ij = dEdGeneralizedCoords[i][gc_index]*
+                    dgcdr_three[0]*rij[kdim]/rijmag;
+                double phi_ik = dEdGeneralizedCoords[i][gc_index]*
+                    dgcdr_three[0]*rik[kdim]/rikmag;
+                double phi_jk = dEdGeneralizedCoords[i][gc_index]*
+                    dgcdr_three[0]*rjk[kdim]/rjkmag;
+                forces[i][kdim] += phi_ij + phi_ik;
+                forces[j][kdim] += -phi_ij + phi_jk;
+                forces[k][kdim] += -phi_ik - phi_jk;
+              }
+
+              // get to next generalized coords symmetry function
+              gc_index += 1;
+
+            }  //loop over same descriptor but different hyperparams
+          }  // loop over descriptors
+        }  // loop over kk (three body neighbors)
+
+      }  // end of first neighbor loop
+    }  // loop over i atoms
+
+  } // compute force
+
+
 
   // everything is good
   ier = KIM_STATUS_OK;

@@ -65,6 +65,8 @@ void NeuralNetwork::add_weight_bias(double** weight, double* bias, int layer)
 
 void NeuralNetwork::forward(double * zeta, const int rows, const int cols)
 {
+  RowMatrixXd act;
+
   // map raw C++ data into Matrix data
   Map<RowMatrixXd> activation(zeta, rows, cols);
 
@@ -74,67 +76,40 @@ void NeuralNetwork::forward(double * zeta, const int rows, const int cols)
       activOutputLayer_ = preactiv_[i];
     }
     else {
-      RowMatrixXd act = activFunc_(preactiv_[i]);
+      act = activFunc_(preactiv_[i]);
       // cannot assign activFunc_(...) directly to activation.
-      // Changing the mapped matrix activation below does not invoke memory reallocation
+      // Changing the mapped matrix `activation' does not invoke memory reallocation
       new (&activation) Map<RowMatrixXd> (act.data(), act.rows(), act.cols());
     }
   }
 }
 
-
-/*
-void NeuralNetwork::forward(double * zeta, const int rows, const int cols)
+void NeuralNetwork::backward()
 {
-  // map raw C++ data into Matrix data
-  Map<RowMatrixXd> activation(zeta, rows, cols);
+  // our cost (energy E) is the sum of activations at output layer, and no activation
+  // function is employed in the output layer
+  int rows = preactiv_[Nlayers_-1].rows();
+  int cols  = preactiv_[Nlayers_-1].cols();
 
-  for (int i=0; i<Nlayers_; i++) {
-    preactiv_[i] = (activation * weights_[i]).rowwise() + biases_[i];
-    if (i == Nlayers_ - 1) {  // output layer (no activation function applied)
-      activOutputLayer_ = preactiv_[i];
-    }
-    else {
-      activation = activFunc_(preactiv_[i]);
-    }
-  }
-}
-*/
-
-
-void NeuralNetwork::backward(double* dEdzeta, const int rows, const int cols)
-{
-  // our `cost' is the sum of activations at output layer, and no activation
-  // is employed in the output layer
-  int extent1 = preactiv_[Nlayers_-1].rows();
-  int extent2  = preactiv_[Nlayers_-1].cols();
-  delta_ = RowMatrixXd::Constant(extent1, extent2, 1.0);
+  // error at output layer
+  RowMatrixXd delta_ = RowMatrixXd::Constant(rows, cols, 1.0);
 
   for (int i = Nlayers_ - 2; i>=0; i--) {
     // eval() is used to prevent aliasing since delta_ is both lvalue and rvalue.
-    delta_ = ( ( delta_ * weights_[i+1].transpose() )
-        .cwiseProduct( activFuncDeriv_(preactiv_[i]) ) ).eval() ;
+    delta_ =  ( delta_ * weights_[i+1].transpose() ).eval()
+        .cwiseProduct( activFuncDeriv_(preactiv_[i]) )  ;
   }
 
-  // derivative of cost (energy here) w.r.t to generalized coords zeta
-  // map raw C++ data into Matrix data
-  Map<RowMatrixXd> maped_dEdzeta(dEdzeta, rows, cols);
-  // copy data
-  maped_dEdzeta = delta_ * weights_[0].transpose();
+  // derivative of cost (energy E) w.r.t to input (generalized coords)
+  gradInput_ = delta_ * weights_[0].transpose();
 }
 
 
 
 
-
-
-
-
-
-
-
-
-
+//*****************************************************************************
+// activation functions and derivatives
+//*****************************************************************************
 
 RowMatrixXd relu(RowMatrixXd const& x)
 {
@@ -185,7 +160,6 @@ RowMatrixXd sigmoid_derivative(RowMatrixXd const& x)
 
   //return ((1.0/(1.0 + (-x).array().exp())) * (1-1.0/(1.0+(-x).array().exp()))).matrix();
 }
-
 
 
 
