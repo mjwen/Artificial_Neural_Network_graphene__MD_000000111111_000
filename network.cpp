@@ -147,18 +147,10 @@ RowMatrixXd sigmoid(RowMatrixXd const& x)
   return (1.0 / ( 1.0 + (-x).array().exp() )).matrix();
 }
 
-//TODO determine which of the following is fastest
 RowMatrixXd sigmoid_derivative(RowMatrixXd const& x)
 {
   RowMatrixXd s = sigmoid(x);
   return ( s.array() * (1.0 - s.array()) ).matrix();
-
-  // return ( sigmoid(x).array() * (1.0 - sigmoid(x).array()) ).matrix();
-  // The above seems fine, the compiler will optimize it such that sigmoid will only
-  // be called once?
-
-
-  //return ((1.0/(1.0 + (-x).array().exp())) * (1-1.0/(1.0+(-x).array().exp()))).matrix();
 }
 
 

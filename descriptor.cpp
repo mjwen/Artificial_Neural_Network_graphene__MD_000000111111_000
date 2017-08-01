@@ -23,10 +23,6 @@ void Descriptor::set_cutfunc(char* name)
 		cutoff = &cut_exp;
 		d_cutoff = &d_cut_exp;
 	}
-
-//TODO delete
-std::cout<<"flag using cutfun "<<name<<std::endl;
-
 }
 
 void Descriptor::add_descriptor(char* name, double** values, int row, int col)

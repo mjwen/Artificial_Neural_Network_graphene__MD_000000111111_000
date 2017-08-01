@@ -92,7 +92,6 @@ ANNImplementation::ANNImplementation(
                             numberParameterFiles, parameterFilePointers);
   if (*ier < KIM_STATUS_OK) return;
 
-//TODO read file
   *ier = ProcessParameterFiles(pkim, parameterFilePointers, numberParameterFiles);
 
   CloseParameterFiles(parameterFilePointers, numberParameterFiles);
@@ -449,7 +448,7 @@ int ANNImplementation::ProcessParameterFiles(
   }
 
 //TODO delete
-  descriptor_->echo_input();
+//  descriptor_->echo_input();
 
   // network structure
   // number of layers
@@ -545,8 +544,7 @@ int ANNImplementation::ProcessParameterFiles(
   delete [] numPerceptrons;
 
 //TODO delete
-  network_->echo_input();
-
+//  network_->echo_input();
 
   // everything is good
   ier = KIM_STATUS_OK;
@@ -830,10 +828,6 @@ int ANNImplementation::SetReinitMutableValues(
 		}
 	}
 	*cutoff = sqrt(*cutoff);
-
-
-//TODO update of other free params shoud go here
-
 
   // everything is good
   ier = KIM_STATUS_OK;
