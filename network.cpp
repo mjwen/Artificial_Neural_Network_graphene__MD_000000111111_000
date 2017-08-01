@@ -74,18 +74,36 @@ void NeuralNetwork::forward(double * zeta, const int rows, const int cols)
       activOutputLayer_ = preactiv_[i];
     }
     else {
+      RowMatrixXd act = activFunc_(preactiv_[i]);
+      // cannot assign activFunc_(...) directly to activation.
+      // Changing the mapped matrix activation below does not invoke memory reallocation
+      new (&activation) Map<RowMatrixXd> (act.data(), act.rows(), act.cols());
+    }
+  }
+}
+
+
+/*
+void NeuralNetwork::forward(double * zeta, const int rows, const int cols)
+{
+  // map raw C++ data into Matrix data
+  Map<RowMatrixXd> activation(zeta, rows, cols);
+
+  for (int i=0; i<Nlayers_; i++) {
+    preactiv_[i] = (activation * weights_[i]).rowwise() + biases_[i];
+    if (i == Nlayers_ - 1) {  // output layer (no activation function applied)
+      activOutputLayer_ = preactiv_[i];
+    }
+    else {
       activation = activFunc_(preactiv_[i]);
     }
   }
-
 }
+*/
+
 
 void NeuralNetwork::backward(double* dEdzeta, const int rows, const int cols)
 {
-  // map raw C++ data into Matrix data
-  Map<RowMatrixXd> maped_dEdzeta(dEdzeta, rows, cols);
-
-
   // our `cost' is the sum of activations at output layer, and no activation
   // is employed in the output layer
   int extent1 = preactiv_[Nlayers_-1].rows();
@@ -99,6 +117,9 @@ void NeuralNetwork::backward(double* dEdzeta, const int rows, const int cols)
   }
 
   // derivative of cost (energy here) w.r.t to generalized coords zeta
+  // map raw C++ data into Matrix data
+  Map<RowMatrixXd> maped_dEdzeta(dEdzeta, rows, cols);
+  // copy data
   maped_dEdzeta = delta_ * weights_[0].transpose();
 }
 

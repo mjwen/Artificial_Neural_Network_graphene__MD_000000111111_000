@@ -65,7 +65,7 @@ class NeuralNetwork
     ActivationFunctionDerivative activFuncDeriv_;
     std::vector<RowMatrixXd> weights_;
     std::vector<RowVectorXd> biases_;
-    std::vector<RowVectorXd> preactiv_;
+    std::vector<RowMatrixXd> preactiv_;
     RowMatrixXd activOutputLayer_;
     RowVectorXd delta_;
     RowMatrixXd dEdzeta_;
