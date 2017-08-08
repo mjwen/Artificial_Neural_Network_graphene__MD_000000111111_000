@@ -590,14 +590,14 @@ int ANNImplementation::getXdouble(char* linePtr, const int N, double* list)
   int i = 0;
 
   strcpy(line, linePtr);
-  pch = strtok(line, " \t");
+  pch = strtok(line, " \t\n\r");
   while (pch != NULL) {
     ier = sscanf(pch, "%lf", &list[i]);
     if (ier != 1) {
       ier = KIM_STATUS_FAIL;
       return ier;
     }
-    pch = strtok(NULL, " \t");
+    pch = strtok(NULL, " \t\n\r");
     i += 1;
   }
   if (i != N) {
@@ -619,14 +619,14 @@ int ANNImplementation::getXint(char* linePtr, const int N, int* list)
   int i = 0;
 
   strcpy(line, linePtr);
-  pch = strtok(line, " \t");
+  pch = strtok(line, " \t\n\r");
   while (pch != NULL) {
     ier = sscanf(pch, "%d", &list[i]);
     if (ier != 1) {
       ier = KIM_STATUS_FAIL;
       return ier;
     }
-    pch = strtok(NULL, " \t");
+    pch = strtok(NULL, " \t\n\r");
     i += 1;
   }
   if (i != N) {
