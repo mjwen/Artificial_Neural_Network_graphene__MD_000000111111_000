@@ -377,33 +377,37 @@ int ANNImplementation::Compute(
       // if particles i and j not interact
       if (rijmag > rcutij) continue;
 
-      int gc_index = 0;
-
       // two-body descriptors
-      for (size_t p=0; p<descriptor_->desc_name.size(); p++) {
+      for (size_t p=0; p<descriptor_->name.size(); p++) {
+
+        if (descriptor_->name[p] != "g1" &&
+            descriptor_->name[p] != "g2" &&
+            descriptor_->name[p] != "g3") {
+          continue;
+        }
+        int idx = descriptor_->starting_index[p];
+
         for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
 
-          // select descriptor
           double gc;
-          if (descriptor_->desc_name[p] == "g1") {
+          if (descriptor_->name[p] == "g1") {
             descriptor_->sym_g1(rijmag, rcutij, gc);
+            generalizedCoords[i][idx] += gc;
           }
-          else if (descriptor_->desc_name[p] == "g2") {
-            double eta = descriptor_->desc_params[p][q][0];
-            double Rs = descriptor_->desc_params[p][q][1];
+          else if (descriptor_->name[p] == "g2") {
+            double eta = descriptor_->params[p][q][0];
+            double Rs = descriptor_->params[p][q][1];
             descriptor_->sym_g2(eta, Rs, rijmag, rcutij, gc);
           }
-          else if (descriptor_->desc_name[p] == "g3") {
-            double kappa = descriptor_->desc_params[p][q][0];
+          else if (descriptor_->name[p] == "g3") {
+            double kappa = descriptor_->params[p][q][0];
             descriptor_->sym_g3(kappa, rijmag, rcutij, gc);
           }
 
+          generalizedCoords[i][idx] += gc;
+          idx += 1;
 
-          // generalized coords
-          generalizedCoords[i][gc_index] += gc;
-          gc_index += 1;
-
-        } //loop over same descriptor but different hyperparams
+        } // loop over same descriptor but different parameter set
       } // loop over descriptors
 
 
@@ -433,30 +437,36 @@ int ANNImplementation::Compute(
 
         if (rikmag > rcutik) continue; // three-dody not interacting
 
-        for (size_t p=0; p<descriptor_->desc_name.size(); p++) {
+        for (size_t p=0; p<descriptor_->name.size(); p++) {
+
+          if (descriptor_->name[p] != "g4" &&
+              descriptor_->name[p] != "g5") {
+            continue;
+          }
+          int idx = descriptor_->starting_index[p];
+
           for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
 
             double gc;
-            if (descriptor_->desc_name[p] == "g4") {
-              double zeta = descriptor_->desc_params[p][q][0];
-              double lambda = descriptor_->desc_params[p][q][1];
-              double eta = descriptor_->desc_params[p][q][2];
+            if (descriptor_->name[p] == "g4") {
+              double zeta = descriptor_->params[p][q][0];
+              double lambda = descriptor_->params[p][q][1];
+              double eta = descriptor_->params[p][q][2];
               descriptor_->sym_g4(zeta, lambda, eta, rvec, rcutvec, gc);
             }
-            else if (descriptor_->desc_name[p] == "g5") {
-              double zeta = descriptor_->desc_params[p][q][0];
-              double lambda = descriptor_->desc_params[p][q][1];
-              double eta = descriptor_->desc_params[p][q][2];
+            else if (descriptor_->name[p] == "g5") {
+              double zeta = descriptor_->params[p][q][0];
+              double lambda = descriptor_->params[p][q][1];
+              double eta = descriptor_->params[p][q][2];
               descriptor_->sym_g5(zeta, lambda, eta, rvec, rcutvec, gc);
             }
 
-            generalizedCoords[i][gc_index] += gc;
-            gc_index += 1;
+            generalizedCoords[i][idx] += gc;
+            idx += 1;
 
-          }  //loop over same descriptor but different hyperparams
+          } // loop over same descriptor but different parameter set
         }  // loop over descriptors
       }  // loop over kk (three body neighbors)
-
     }  // end of first neighbor loop
   }  // end of loop over contributing particles
 
@@ -527,38 +537,41 @@ int ANNImplementation::Compute(
         // if particles i and j not interact
         if (rijmag > rcutij) continue;
 
-        int gc_index = 0;
-        double dgcdr_two;
         // two-body descriptors
-        for (size_t p=0; p<descriptor_->desc_name.size(); p++) {
+        for (size_t p=0; p<descriptor_->name.size(); p++) {
+
+          if (descriptor_->name[p] != "g1" &&
+              descriptor_->name[p] != "g2" &&
+              descriptor_->name[p] != "g3") {
+            continue;
+          }
+          int idx = descriptor_->starting_index[p];
+
           for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
 
-            // select descriptor
             double gc;
-            if (descriptor_->desc_name[p] == "g1") {
+            double dgcdr_two;
+            if (descriptor_->name[p] == "g1") {
               descriptor_->sym_d_g1(rijmag, rcutij, gc, dgcdr_two);
             }
-            else if (descriptor_->desc_name[p] == "g2") {
-              double eta = descriptor_->desc_params[p][q][0];
-              double Rs = descriptor_->desc_params[p][q][1];
+            else if (descriptor_->name[p] == "g2") {
+              double eta = descriptor_->params[p][q][0];
+              double Rs = descriptor_->params[p][q][1];
               descriptor_->sym_d_g2(eta, Rs, rijmag, rcutij, gc, dgcdr_two);
             }
-            else if (descriptor_->desc_name[p] == "g3") {
-              double kappa = descriptor_->desc_params[p][q][0];
+            else if (descriptor_->name[p] == "g3") {
+              double kappa = descriptor_->params[p][q][0];
               descriptor_->sym_d_g3(kappa, rijmag, rcutij, gc, dgcdr_two);
             }
 
-            // forces
             for (int kdim = 0; kdim < DIM; ++kdim) {
-              double phi = dEdGeneralizedCoords[i][gc_index]*dgcdr_two*rij[kdim]/rijmag;
+              double phi = dEdGeneralizedCoords[i][idx]*dgcdr_two*rij[kdim]/rijmag;
               forces[i][kdim] += phi;
               forces[j][kdim] -= phi;
             }
+            idx += 1;
 
-            // get to next generalized coords symmetry function
-            gc_index += 1;
-
-          } //loop over same descriptor but different hyperparams
+          } // loop over same descriptor but different parameter set
         } // loop over descriptors
 
 
@@ -588,47 +601,49 @@ int ANNImplementation::Compute(
 
           if (rikmag > rcutik) continue; // three-dody not interacting
 
-          for (size_t p=0; p<descriptor_->desc_name.size(); p++) {
+          for (size_t p=0; p<descriptor_->name.size(); p++) {
+
+            if (descriptor_->name[p] != "g4" &&
+                descriptor_->name[p] != "g5") {
+              continue;
+            }
+            int idx = descriptor_->starting_index[p];
+
             for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
 
               double gc;
               double dgcdr_three[3];
-              if (descriptor_->desc_name[p] == "g4") {
-                double zeta = descriptor_->desc_params[p][q][0];
-                double lambda = descriptor_->desc_params[p][q][1];
-                double eta = descriptor_->desc_params[p][q][2];
+              if (descriptor_->name[p] == "g4") {
+                double zeta = descriptor_->params[p][q][0];
+                double lambda = descriptor_->params[p][q][1];
+                double eta = descriptor_->params[p][q][2];
                 descriptor_->sym_d_g4(zeta, lambda, eta, rvec, rcutvec, gc, dgcdr_three);
               }
-              else if (descriptor_->desc_name[p] == "g5") {
-                double zeta = descriptor_->desc_params[p][q][0];
-                double lambda = descriptor_->desc_params[p][q][1];
-                double eta = descriptor_->desc_params[p][q][2];
+              else if (descriptor_->name[p] == "g5") {
+                double zeta = descriptor_->params[p][q][0];
+                double lambda = descriptor_->params[p][q][1];
+                double eta = descriptor_->params[p][q][2];
                 descriptor_->sym_d_g5(zeta, lambda, eta, rvec, rcutvec, gc, dgcdr_three);
               }
 
-              // forces
               for (int kdim = 0; kdim < DIM; ++kdim) {
-                double phi_ij = dEdGeneralizedCoords[i][gc_index]*
-                    dgcdr_three[0]*rij[kdim]/rijmag;
-                double phi_ik = dEdGeneralizedCoords[i][gc_index]*
-                    dgcdr_three[0]*rik[kdim]/rikmag;
-                double phi_jk = dEdGeneralizedCoords[i][gc_index]*
-                    dgcdr_three[0]*rjk[kdim]/rjkmag;
+                double phi_ij = dEdGeneralizedCoords[i][idx]*
+                  dgcdr_three[0]*rij[kdim]/rijmag;
+                double phi_ik = dEdGeneralizedCoords[i][idx]*
+                  dgcdr_three[1]*rik[kdim]/rikmag;
+                double phi_jk = dEdGeneralizedCoords[i][idx]*
+                  dgcdr_three[2]*rjk[kdim]/rjkmag;
                 forces[i][kdim] += phi_ij + phi_ik;
                 forces[j][kdim] += -phi_ij + phi_jk;
                 forces[k][kdim] += -phi_ik - phi_jk;
               }
+              idx += 1;
 
-              // get to next generalized coords symmetry function
-              gc_index += 1;
-
-            }  //loop over same descriptor but different hyperparams
+            } // loop over same descriptor but different parameter set
           }  // loop over descriptors
         }  // loop over kk (three body neighbors)
-
-      }  // end of first neighbor loop
+      }  // loop over first neighbor
     }  // loop over i atoms
-
   } // compute force
 
 

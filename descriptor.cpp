@@ -8,8 +8,8 @@ Descriptor::Descriptor(){
   }
 
 Descriptor::~Descriptor() {
-	for (size_t i=0; i<desc_params.size(); i++) {
-		Deallocate2DArray(desc_params.at(i));
+	for (size_t i=0; i<params.size(); i++) {
+		Deallocate2DArray(params.at(i));
 	}
 }
 
@@ -34,10 +34,17 @@ void Descriptor::add_descriptor(char* name, double** values, int row, int col)
 			params[i][j] = values[i][j];
 		}
 	}
-	desc_name.push_back(name);
-	desc_params.push_back(params);
+
+  int index = 0;
+  for (size_t i=0; i<num_param_sets.size(); i++) {
+    index += num_param_sets[i];
+  }
+
+	this->name.push_back(name);
+	this->params.push_back(params);
 	num_param_sets.push_back(row);
 	num_params.push_back(col);
+	starting_index.push_back(index);
 
   // set t
   if (strcmp(name, "g4") == 0 || strcmp(name, "g5") ==0 ) {

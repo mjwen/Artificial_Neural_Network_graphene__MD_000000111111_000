@@ -20,10 +20,12 @@ class Descriptor
 {
   public:
 
-		std::vector<std::string> desc_name; // name of each descriptor
-		std::vector<double**> desc_params;  // params of each descriptor
-		std::vector<int> num_param_sets;    // number of parameter sets of each descriptor
-		std::vector<int> num_params;        // size of parameters of each descriptor
+		std::vector<std::string> name;    // name of each descriptor
+		std::vector<int> starting_index;  // starting index of each descriptor
+                                      // in generalized coords
+		std::vector<double**> params;     // params of each descriptor
+		std::vector<int> num_param_sets;  // number of parameter sets of each descriptor
+		std::vector<int> num_params;      // size of parameters of each descriptor
     bool has_three_body;
 
     Descriptor();
@@ -57,13 +59,13 @@ class Descriptor
 //TODO delete; for debug purpose
     void echo_input() {
       std::cout<<"====================================="<<std::endl;
-      for (size_t i=0; i<desc_name.size(); i++) {
+      for (size_t i=0; i<name.size(); i++) {
         int rows = num_param_sets.at(i);
         int cols = num_params.at(i);
-        std::cout<<"name: "<<desc_name.at(i)<<", rows: "<<rows<<", cols: "<<cols<<std::endl;
+        std::cout<<"name: "<<name.at(i)<<", rows: "<<rows<<", cols: "<<cols<<std::endl;
         for (int m=0; m<rows; m++) {
           for (int n=0; n<cols; n++) {
-            std::cout<<desc_params.at(i)[m][n]<< " ";
+            std::cout<<params.at(i)[m][n]<< " ";
           }
           std::cout<<std::endl;
         }
@@ -93,6 +95,8 @@ inline double d_cut_cos(double r, double rcut) {
 		return 0.0;
 }
 
+
+//TODO correct it
 inline double cut_exp(double r, double rcut) {
 	if (r < rcut)
 		return 1;
