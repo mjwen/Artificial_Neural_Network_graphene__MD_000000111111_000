@@ -392,7 +392,6 @@ int ANNImplementation::Compute(
           double gc;
           if (descriptor_->name[p] == "g1") {
             descriptor_->sym_g1(rijmag, rcutij, gc);
-            generalizedCoords[i][idx] += gc;
           }
           else if (descriptor_->name[p] == "g2") {
             double eta = descriptor_->params[p][q][0];
@@ -429,8 +428,8 @@ int ANNImplementation::Compute(
         }
         double const rikmag = sqrt(rik[0]*rik[0] + rik[1]*rik[1] + rik[2]*rik[2]);
         double const rjkmag = sqrt(rjk[0]*rjk[0] + rjk[1]*rjk[1] + rjk[2]*rjk[2]);
-        double const rcutik = constCutoffsSq2D[iSpecies][kSpecies];
-        double const rcutjk = constCutoffsSq2D[jSpecies][kSpecies];
+        double const rcutik = sqrt(constCutoffsSq2D[iSpecies][kSpecies]);
+        double const rcutjk = sqrt(constCutoffsSq2D[jSpecies][kSpecies]);
 
         double const rvec[3] = {rijmag, rikmag, rjkmag};
         double const rcutvec[3] = {rcutij, rcutik, rcutjk};
@@ -593,8 +592,8 @@ int ANNImplementation::Compute(
           }
           double const rikmag = sqrt(rik[0]*rik[0] + rik[1]*rik[1] + rik[2]*rik[2]);
           double const rjkmag = sqrt(rjk[0]*rjk[0] + rjk[1]*rjk[1] + rjk[2]*rjk[2]);
-          double const rcutik = constCutoffsSq2D[iSpecies][kSpecies];
-          double const rcutjk = constCutoffsSq2D[jSpecies][kSpecies];
+          double const rcutik = sqrt(constCutoffsSq2D[iSpecies][kSpecies]);
+          double const rcutjk = sqrt(constCutoffsSq2D[jSpecies][kSpecies]);
 
           double const rvec[3] = {rijmag, rikmag, rjkmag};
           double const rcutvec[3] = {rcutij, rcutik, rcutjk};
