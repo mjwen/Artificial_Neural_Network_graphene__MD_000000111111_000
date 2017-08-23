@@ -83,6 +83,8 @@ class NeuralNetwork
 // activation fucntion and derivatives
 RowMatrixXd relu(RowMatrixXd const& x);
 RowMatrixXd relu_derivative(RowMatrixXd const& x);
+RowMatrixXd elu(RowMatrixXd const& x);
+RowMatrixXd elu_derivative(RowMatrixXd const& x);
 RowMatrixXd tanh(RowMatrixXd const& x);
 RowMatrixXd tanh_derivative(RowMatrixXd const& x);
 RowMatrixXd sigmoid(RowMatrixXd const& x);

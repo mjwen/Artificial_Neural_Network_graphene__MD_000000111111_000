@@ -21,13 +21,21 @@ void NeuralNetwork::set_nn_structure(int size_input, int num_layers,
 }
 
 void NeuralNetwork::set_activation(char* name) {
-  if (strcmp(name, "relu") == 0) {
-    activFunc_ = &relu;
-    activFuncDeriv_ = &relu_derivative;
+  if (strcmp(name, "sigmoid") == 0) {
+    activFunc_ = &sigmoid;
+    activFuncDeriv_ = &sigmoid_derivative;
   }
   else if (strcmp(name, "tanh") == 0) {
     activFunc_ = &tanh;
     activFuncDeriv_ = &tanh_derivative;
+  }
+  else if (strcmp(name, "relu") == 0) {
+    activFunc_ = &relu;
+    activFuncDeriv_ = &relu_derivative;
+  }
+  else if (strcmp(name, "elu") == 0) {
+    activFunc_ = &elu;
+    activFuncDeriv_ = &elu_derivative;
   }
 }
 
@@ -124,6 +132,30 @@ RowMatrixXd relu_derivative(RowMatrixXd const& x)
     for (int j=0; j<x.cols(); j++) {
       if (x(i,j) < 0.) {
         deriv(i,j) = 0.;
+      } else {
+        deriv(i,j) = 1.;
+      }
+    }
+  }
+  return deriv;
+}
+
+RowMatrixXd elu(RowMatrixXd const& x)
+{
+  double alpha = 1.0;
+  // the following is invalid for large alpha, e.g. alpha=10
+  return x.cwiseMax((alpha*x.array().exp() - alpha).matrix());
+}
+
+RowMatrixXd elu_derivative(RowMatrixXd const& x)
+{
+  //TODO Eigenic way should exist
+  double alpha = 1.0;
+  RowMatrixXd deriv(x.rows(), x.cols());
+  for (int i=0; i<x.rows(); i++) {
+    for (int j=0; j<x.cols(); j++) {
+      if (x(i,j) < 0.) {
+        deriv(i,j) = alpha*exp(x(i,j));
       } else {
         deriv(i,j) = 1.;
       }

@@ -311,23 +311,18 @@ int ANNImplementation::ProcessParameterFiles(
     fclose(parameterFilePointers[0]);
     return ier;
   }
-  // change to lower case name
-  lowerCase(name);
 
+  // register cutoff
+  lowerCase(name);
   if (strcmp(name, "cos") != 0
-      && strcmp(name, "exp") != 0
-      && strcmp(name, "tanh") != 0)
+      && strcmp(name, "exp") != 0)
   {
-    sprintf(errorMsg, "unsupported cutoff type. Expecting `cos', `exp' or "
-        "`tanh', given %s.\n", name);
+    sprintf(errorMsg, "unsupported cutoff type. Expecting `cos', or `exp' "
+        "given %s.\n", name);
     ier = KIM_STATUS_FAIL;
     pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
     fclose(parameterFilePointers[0]);
-
-
   }
-
-
 	descriptor_->set_cutfunc(name);
 
 //TODO modifiy this such that each pair has its own cutoff
@@ -494,6 +489,20 @@ int ANNImplementation::ProcessParameterFiles(
     pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
     fclose(parameterFilePointers[0]);
     return ier;
+  }
+
+  // register activation function
+  lowerCase(name);
+  if (strcmp(name, "sigmoid") != 0
+      && strcmp(name, "tanh") != 0
+      && strcmp(name, "relu") != 0
+      && strcmp(name, "elu") != 0)
+  {
+    sprintf(errorMsg, "unsupported activation function. Expecting `sigmoid', `tanh' "
+        " `relu' or `elu', given %s.\n", name);
+    ier = KIM_STATUS_FAIL;
+    pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+    fclose(parameterFilePointers[0]);
   }
   network_->set_activation(name);
 
