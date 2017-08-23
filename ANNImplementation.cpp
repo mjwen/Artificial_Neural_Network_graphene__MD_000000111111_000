@@ -329,7 +329,11 @@ int ANNImplementation::ProcessParameterFiles(
 
 
 	descriptor_->set_cutfunc(name);
-	cutoffs_[0] = cutoff;
+
+//TODO modifiy this such that each pair has its own cutoff
+  for (int i=0; i<numberUniqueSpeciesPairs_; i++) {
+	  cutoffs_[i] = cutoff;
+  }
 
 	// number of descriptor types
   getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
