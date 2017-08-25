@@ -403,6 +403,11 @@ int ANNImplementation::Compute(
             descriptor_->sym_g3(kappa, rijmag, rcutij, gc);
           }
 
+          // centering and normalization
+          if (descriptor_->center_and_normalize) {
+            gc = (gc - descriptor_->features_mean[idx])/descriptor_->features_std[idx];
+          }
+
           generalizedCoords[i][idx] += gc;
           idx += 1;
 
@@ -458,6 +463,11 @@ int ANNImplementation::Compute(
               double lambda = descriptor_->params[p][q][1];
               double eta = descriptor_->params[p][q][2];
               descriptor_->sym_g5(zeta, lambda, eta, rvec, rcutvec, gc);
+            }
+
+            // centering and normalization
+            if (descriptor_->center_and_normalize) {
+              gc = (gc - descriptor_->features_mean[idx])/descriptor_->features_std[idx];
             }
 
             generalizedCoords[i][idx] += gc;
@@ -563,6 +573,11 @@ int ANNImplementation::Compute(
               descriptor_->sym_d_g3(kappa, rijmag, rcutij, gc, dgcdr_two);
             }
 
+            // centering and normalization
+            if (descriptor_->center_and_normalize) {
+              dgcdr_two /= descriptor_->features_std[idx];
+            }
+
             for (int kdim = 0; kdim < DIM; ++kdim) {
               double phi = dEdGeneralizedCoords[i][idx]*dgcdr_two*rij[kdim]/rijmag;
               forces[i][kdim] += phi;
@@ -623,6 +638,13 @@ int ANNImplementation::Compute(
                 double lambda = descriptor_->params[p][q][1];
                 double eta = descriptor_->params[p][q][2];
                 descriptor_->sym_d_g5(zeta, lambda, eta, rvec, rcutvec, gc, dgcdr_three);
+              }
+
+              // centering and normalization
+              if (descriptor_->center_and_normalize) {
+                dgcdr_three[0] /= descriptor_->features_std[idx];
+                dgcdr_three[1] /= descriptor_->features_std[idx];
+                dgcdr_three[2] /= descriptor_->features_std[idx];
               }
 
               for (int kdim = 0; kdim < DIM; ++kdim) {

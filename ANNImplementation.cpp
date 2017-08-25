@@ -445,9 +445,97 @@ int ANNImplementation::ProcessParameterFiles(
       Deallocate2DArray(descParams);
     }
   }
+  // number of descriptors
+  numDescs = descriptor_->get_num_descriptors();
+
+
+  // centering and normalizing params
+  // flag, whether we use this feature
+  getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
+  ier = sscanf(nextLine, "%*s %s", name);
+  if (ier != 1) {
+    sprintf(errorMsg, "unable to read centering and normalization info from line:\n");
+    strcat(errorMsg, nextLine);
+    ier = KIM_STATUS_FAIL;
+    pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+    fclose(parameterFilePointers[0]);
+    return ier;
+  }
+  lowerCase(name);
+  bool do_center_and_normalize;
+  if (strcmp(name, "true") == 0) {
+    do_center_and_normalize = true;
+  } else {
+    do_center_and_normalize = false;
+  }
+
+  int size=0;
+  double* means = nullptr;
+  double* stds = nullptr;
+  if (do_center_and_normalize)
+  {
+    // size of the data, this should be equal to numDescs
+    getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
+    ier = sscanf(nextLine, "%d", &size);
+    if (ier != 1) {
+      sprintf(errorMsg, "unable to read the size of centering and normalization "
+          "data info from line:\n");
+      strcat(errorMsg, nextLine);
+      ier = KIM_STATUS_FAIL;
+      pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+      fclose(parameterFilePointers[0]);
+      return ier;
+    }
+    if (size != numDescs) {
+      sprintf(errorMsg, "Size of centering and normalizing data inconsistent with "
+          "the number of descriptors. Size = %d, num_descriptors=%d\n", size, numDescs);
+      ier = KIM_STATUS_FAIL;
+      pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+      fclose(parameterFilePointers[0]);
+    }
+
+    // read means
+    AllocateAndInitialize1DArray(means, size);
+    for (int i=0; i<size; i++) {
+      getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
+      ier = sscanf(nextLine, "%lf", &means[i]);
+      if (ier != 1) {
+        sprintf(errorMsg, "unable to read `means' from line:\n");
+        strcat(errorMsg, nextLine);
+        ier = KIM_STATUS_FAIL;
+        pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+        fclose(parameterFilePointers[0]);
+        return ier;
+      }
+    }
+
+    // read standard deviations
+    AllocateAndInitialize1DArray(stds, size);
+    for (int i=0; i<size; i++) {
+      getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
+      ier = sscanf(nextLine, "%lf", &stds[i]);
+      if (ier != 1) {
+        sprintf(errorMsg, "unable to read `means' from line:\n");
+        strcat(errorMsg, nextLine);
+        ier = KIM_STATUS_FAIL;
+        pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+        fclose(parameterFilePointers[0]);
+        return ier;
+      }
+    }
+  }
+
+  // store info into descriptor class
+	descriptor_->set_center_and_normalize(do_center_and_normalize, size, means, stds);
+  Deallocate1DArray(means);
+  Deallocate1DArray(stds);
+
+
 
 //TODO delete
-//  descriptor_->echo_input();
+  descriptor_->echo_input();
+
+
 
   // network structure
   // number of layers
@@ -473,8 +561,6 @@ int ANNImplementation::ProcessParameterFiles(
     fclose(parameterFilePointers[0]);
     return ier;
   }
-  // number of descriptors, (size of input)
-  numDescs = descriptor_->get_num_descriptors();
   // copy to network class
   network_->set_nn_structure(numDescs, numLayers, numPerceptrons);
 
@@ -553,6 +639,8 @@ int ANNImplementation::ProcessParameterFiles(
     Deallocate2DArray(weight);
     Deallocate1DArray(bias);
   }
+
+
 
   delete [] numPerceptrons;
 

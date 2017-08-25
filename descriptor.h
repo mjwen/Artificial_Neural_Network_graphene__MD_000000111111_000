@@ -28,12 +28,19 @@ class Descriptor
 		std::vector<int> num_params;      // size of parameters of each descriptor
     bool has_three_body;
 
+    bool center_and_normalize;        // whether to center and normalize the data
+    std::vector<double> features_mean;
+    std::vector<double> features_std;
+
+
     Descriptor();
 		~Descriptor();
 
 		// initialization helper
 		void set_cutfunc(char* name);
 		void add_descriptor(char* name, double** values, int row, int col);
+		void set_center_and_normalize(bool do_center_and_normalize, int size,
+        double* means, double* stds);
 
     int get_num_descriptors();
 
@@ -71,6 +78,18 @@ class Descriptor
         }
         std::cout<<std::endl;
       }
+
+      // centering and normalization
+      std::cout<<"centering and normalizing params"<<std::endl;
+      std::cout<<"means:"<<std::endl;
+      for (size_t i=0; i<features_mean.size(); i++) {
+        std::cout<<features_mean.at(i)<< std::endl;
+      }
+      std::cout<<"stds:"<<std::endl;
+      for (size_t i=0; i<features_std.size(); i++) {
+        std::cout<<features_std.at(i)<< std::endl;
+      }
+
     }
 
 

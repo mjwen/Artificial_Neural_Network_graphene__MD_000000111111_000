@@ -52,6 +52,16 @@ void Descriptor::add_descriptor(char* name, double** values, int row, int col)
   }
 }
 
+void Descriptor::set_center_and_normalize(bool do_center_and_normalize, int size,
+    double* means, double* stds) {
+  center_and_normalize = do_center_and_normalize;
+  for (int i=0; i<size; i++) {
+    features_mean.push_back(means[i]);
+    features_std.push_back(stds[i]);
+  }
+}
+
+
 int Descriptor::get_num_descriptors() {
   int N = 0;
   for (size_t i=0; i<num_param_sets.size(); i++) {
