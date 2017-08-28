@@ -403,11 +403,6 @@ int ANNImplementation::Compute(
             descriptor_->sym_g3(kappa, rijmag, rcutij, gc);
           }
 
-          // centering and normalization
-          if (descriptor_->center_and_normalize) {
-            gc = (gc - descriptor_->features_mean[idx])/descriptor_->features_std[idx];
-          }
-
           generalizedCoords[i][idx] += gc;
           idx += 1;
 
@@ -465,11 +460,6 @@ int ANNImplementation::Compute(
               descriptor_->sym_g5(zeta, lambda, eta, rvec, rcutvec, gc);
             }
 
-            // centering and normalization
-            if (descriptor_->center_and_normalize) {
-              gc = (gc - descriptor_->features_mean[idx])/descriptor_->features_std[idx];
-            }
-
             generalizedCoords[i][idx] += gc;
             idx += 1;
 
@@ -479,6 +469,16 @@ int ANNImplementation::Compute(
     }  // end of first neighbor loop
   }  // end of loop over contributing particles
 
+
+  // centering and normalization
+  if (descriptor_->center_and_normalize) {
+    for (int i=0; i<Ncontrib; i++) {
+      for (int j=0; j<Ndescriptors; j++) {
+        generalizedCoords[i][j] = (generalizedCoords[i][j] -
+            descriptor_->features_mean[j]) / descriptor_->features_std[j];
+      }
+    }
+  }
 
 
   // NN feedforward

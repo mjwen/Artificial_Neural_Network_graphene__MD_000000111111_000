@@ -531,10 +531,8 @@ int ANNImplementation::ProcessParameterFiles(
   Deallocate1DArray(stds);
 
 
-
 //TODO delete
-  descriptor_->echo_input();
-
+//  descriptor_->echo_input();
 
 
   // network structure
