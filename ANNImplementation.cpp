@@ -71,9 +71,12 @@ ANNImplementation::ANNImplementation(
       numberModelSpecies_(0),
       numberUniqueSpeciesPairs_(0),
       cutoffs_(0),
+      cutoffs_samelayer_(0),
 			cutoffsSq2D_(0),
+			cutoffsSq2D_samelayer_(0),
       cachedNumberOfParticles_(0),
-      cachedNumberContributingParticles_(0)
+      cachedNumberContributingParticles_(0),
+      numberOfParticles_last_call_(0)
 			// add potential parameters
 
 
@@ -119,8 +122,10 @@ ANNImplementation::ANNImplementation(
 ANNImplementation::~ANNImplementation()
 { // note: it is ok to delete a null pointer and we have ensured that
   // everything is initialized to null
-  delete [] cutoffs_;
+  Deallocate1DArray(cutoffs_);
+  Deallocate1DArray(cutoffs_samelayer_);
   Deallocate2DArray(cutoffsSq2D_);
+  Deallocate2DArray(cutoffsSq2D_samelayer_);
 }
 
 //******************************************************************************
@@ -167,6 +172,10 @@ int ANNImplementation::Compute(KIM_API_model* const pkim)
                                 particleSpecies, get_neigh,
                                 coordinates, energy, particleEnergy, forces);
   if (ier < KIM_STATUS_OK) return ier;
+
+
+  // create layers
+  CreateLayers(pkim, get_neigh, particleSpecies, coordinates, -1);
 
   // Skip this check for efficiency
   //
@@ -282,6 +291,7 @@ int ANNImplementation::ProcessParameterFiles(
   char errorMsg[MAXLINE];
   char name[MAXLINE];
 	double cutoff;
+	double cutoff_samelayer;
 
   // descriptor
 	int numDescTypes;
@@ -302,8 +312,8 @@ int ANNImplementation::ProcessParameterFiles(
 
 	// cutoff
   getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
-  ier = sscanf(nextLine, "%s %lf", name, &cutoff);
-  if (ier != 2) {
+  ier = sscanf(nextLine, "%s %lf %lf", name, &cutoff, &cutoff_samelayer);
+  if (ier != 3) {
     sprintf(errorMsg, "unable to read cutoff from line:\n");
     strcat(errorMsg, nextLine);
     ier = KIM_STATUS_FAIL;
@@ -326,8 +336,12 @@ int ANNImplementation::ProcessParameterFiles(
 	descriptor_->set_cutfunc(name);
 
 //TODO modifiy this such that each pair has its own cutoff
+// use of numberUniqueSpeciesPairs is not good. Since it requires the Model
+// provide all the params that the Driver supports. number of species should
+// be read in from the input file.
   for (int i=0; i<numberUniqueSpeciesPairs_; i++) {
 	  cutoffs_[i] = cutoff;
+	  cutoffs_samelayer_[i] = cutoff_samelayer;
   }
 
 	// number of descriptor types
@@ -757,8 +771,10 @@ void ANNImplementation::CloseParameterFiles(
 //******************************************************************************
 void ANNImplementation::AllocateFreeParameterMemory()
 { // allocate memory for data
-  cutoffs_ = new double[numberUniqueSpeciesPairs_];
+  AllocateAndInitialize1DArray(cutoffs_, numberUniqueSpeciesPairs_);
+  AllocateAndInitialize1DArray(cutoffs_samelayer_, numberUniqueSpeciesPairs_);
 	AllocateAndInitialize2DArray(cutoffsSq2D_, numberModelSpecies_, numberModelSpecies_);
+	AllocateAndInitialize2DArray(cutoffsSq2D_samelayer_, numberModelSpecies_, numberModelSpecies_);
 }
 
 //******************************************************************************
@@ -873,6 +889,8 @@ int ANNImplementation::SetReinitMutableValues(
 		for (int j = 0; j <= i ; ++j) {
 			int const index = j*numberModelSpecies_ + i - (j*j + j)/2;
 			cutoffsSq2D_[i][j] = cutoffsSq2D_[j][i] = (cutoffs_[index]*cutoffs_[index]);
+			cutoffsSq2D_samelayer_[i][j] = cutoffsSq2D_samelayer_[j][i] =
+          (cutoffs_samelayer_[index]*cutoffs_samelayer_[index]);
 		}
 	}
 
@@ -1072,4 +1090,215 @@ int ANNImplementation::GetComputeIndex(
 
   return index;
 }
+
+
+//******************************************************************************
+// assign atoms into layers
+// To assign atoms into different layers. If `ruct_layer < 0', it will be
+// determined internally within the code by finding the max of the min of pair
+// distance between eatch atom and its neighbors. This is a bit more expensive
+// since it runs through the neighborlist once.
+//
+//******************************************************************************
+int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
+    GetNeighborFunction* const get_neigh,
+    const int* const particleSpecies,
+    const VectorOfSizeDIM* const coordinates,
+    double const rcut_layer)
+{
+
+  // determine whether need to re-assign atoms to layer
+  bool need_create = false;
+
+  // number of particles changed?
+  if (numberOfParticles_last_call_ != cachedNumberOfParticles_) {
+    need_create = true;
+  }
+  else {
+    for (int i=0; i<cachedNumberOfParticles_; i++) {
+
+      // particle species changed?
+      if (particleSpecies_last_call_[i] != particleSpecies[i]) {
+        need_create = true;
+        break;
+      }
+
+      // particles move far?
+//TODO add creterion based on coorinates
+
+    }
+  }
+
+  if (!need_create) return 0;
+
+
+  // assign atoms to layers
+
+  // backup particle species and coordinates info
+  numberOfParticles_last_call_ = cachedNumberOfParticles_;
+  particleSpecies_last_call_.resize(numberOfParticles_last_call_);
+  coordinates_last_call_.resize(DIM*numberOfParticles_last_call_);
+  for (int i=0; i<numberOfParticles_last_call_; i++) {
+    particleSpecies_last_call_[i] = particleSpecies[i];
+    coordinates_last_call_[i*DIM+0] = coordinates[i][0];
+    coordinates_last_call_[i*DIM+1] = coordinates[i][1];
+    coordinates_last_call_[i*DIM+2] = coordinates[i][2];
+  }
+
+
+  // cutoff used to find atoms in the same layer
+  double cutsq_layer;
+  if (rcut_layer > 0) {
+    cutsq_layer = rcut_layer * rcut_layer;
+  }
+  else {   // max of min of pair distance is rcut_layer
+
+    std::vector<double> min_rsq(cachedNumberOfParticles_, 1e10);
+
+
+    for (int i=0; i<cachedNumberOfParticles_; i++) {
+      // get neighbors of atom i
+      int one = 1;
+      int numnei;
+      int dummy;
+      int* ilist = 0;
+      double* pRij = 0;
+      int const baseConvert = baseconvert_;
+      get_neigh( reinterpret_cast<void**>(const_cast<KIM_API_model**>(&pkim)),
+          &one, &i, &dummy, &numnei, &ilist, &pRij);
+
+      // Setup loop over neighbors of current particle
+      for (int jj = 0; jj < numnei; ++jj)
+      {
+        // adjust index of particle neighbor
+        int const j = ilist[jj] + baseConvert;
+        double rij[DIM];
+
+        // Compute rij
+        for (int dim = 0; dim < DIM; ++dim) {
+          rij[dim] = coordinates[j][dim] - coordinates[i][dim];
+        }
+
+        // compute distance squared
+        double const rsq = rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2];
+
+        if (rsq < min_rsq[i]) {
+          min_rsq[i] = rsq;
+        }
+
+      }
+    }
+
+    double max_min_rsq = *(std::max_element(min_rsq.begin(), min_rsq.end()));
+    cutsq_layer = max_min_rsq * 1.01;  // *1.01 to get over edge case
+  }
+  // we can set it manually to speed up
+  // cutsq_layer = (0.72*3.35)*(0.72*3.35);
+
+
+  // layers
+  int nremain; // number of atoms not included in any layer
+  int nlayers;
+
+  // init vars
+  nlayers = 1;
+  nremain = cachedNumberOfParticles_;
+  in_layer_.assign(cachedNumberOfParticles_, -1); // -1 means atoms not in any layer
+
+  // create all layers
+  while(true) {
+
+    // current layer contains which atoms (init to -1 indicating no atom)
+    std::vector<int> layer(nremain, -1);
+
+    // find an atom not incldued in any layer and start with it
+    int currentLayer = nlayers - 1;
+    for (int k=0; k<cachedNumberOfParticles_; k++) {
+      if (in_layer_[k] == -1) {
+        in_layer_[k] = currentLayer;
+        layer[0] = k; // first atom in current layer
+        break;
+      }
+    }
+
+    int nin = 1; // number of atoms in current layer
+    int ii = 0;  // index of atoms in current layer
+
+    while(true) { // find all atoms in currentLayer
+
+      int i = layer[ii];
+
+      // get neighbors of atom i
+      int one = 1;
+      int numnei;
+      int dummy;
+      int* ilist = 0;
+      double* pRij = 0;
+      int const baseConvert = baseconvert_;
+      get_neigh( reinterpret_cast<void**>(const_cast<KIM_API_model**>(&pkim)),
+          &one, &i, &dummy, &numnei, &ilist, &pRij);
+
+
+      // Setup loop over neighbors of current particle
+      for (int jj = 0; jj < numnei; ++jj)
+      {
+        // adjust index of particle neighbor
+        int const j = ilist[jj] + baseConvert;
+        double rij[DIM];
+
+        // Compute rij and rsq
+        for (int dim = 0; dim < DIM; ++dim) {
+          rij[dim] = coordinates[j][dim] - coordinates[i][dim];
+        }
+        double const rsq = rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2];
+
+        // should be included in current layer
+        if (rsq < cutsq_layer) {
+
+          if (in_layer_[j] == -1) { // has not been included in some layer
+            nin += 1;
+            layer[nin-1] = j;
+            in_layer_[j] = currentLayer;
+          }
+          else {
+            // in a layer but not the current layer, should not happen provided the
+            // choice of cutsq_layer is appropriate
+            if(in_layer_[j] != currentLayer){
+              std::cerr <<"ERROR: attempting to include atom " <<j <<"in layer "
+                <<currentLayer <<", but it is already in layer " <<in_layer_[j]
+                <<"." <<std::endl;
+              return -1;
+            }
+          }
+        }
+
+      } // loop on jj
+
+
+      // get to the next atom in current layer
+      ii++;
+      if (ii == nin) break;
+
+    } // finding atoms in one layer
+
+    nremain -= nin;
+    if (nremain == 0) break;
+    nlayers += 1;
+  } // finding atoms in all layers
+
+
+  //TODO delete debug
+/*    std::cout<<"Cutoff for layer "<<sqrt(cutsq_layer)<<std::endl;
+      std::cout <<"Number of layers: " <<nlayers <<std::endl;
+      std::cout <<"#atom id     layer"<<std::endl;
+      for (int i=0; i<cachedNumberOfParticles_; i++) {
+      std::cout <<i <<"         "<<in_layer_[i]<<std::endl;
+      }
+*/
+
+  return 0;
+}
+
+
+
 

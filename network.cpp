@@ -76,6 +76,7 @@ void NeuralNetwork::forward(double * zeta, const int rows, const int cols)
   RowMatrixXd act;
 
   // map raw C++ data into Matrix data
+  // see: https://eigen.tuxfamily.org/dox/group__TutorialMapClass.html
   Map<RowMatrixXd> activation(zeta, rows, cols);
 
   for (int i=0; i<Nlayers_; i++) {

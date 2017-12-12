@@ -185,6 +185,7 @@ class ANNImplementation
   //   Memory deallocated in destructor
   //   Data set in ReadParameterFile routines OR by KIM Simulator
   double* cutoffs_;
+  double* cutoffs_samelayer_;
 
   // Mutable values that only change when reinit() executes
   //   Set in Reinit (via SetReinitMutableValues)
@@ -198,6 +199,7 @@ class ANNImplementation
   //
   // ANNImplementation: values
   double** cutoffsSq2D_;
+  double** cutoffsSq2D_samelayer_;
 
   // Mutable values that can change with each call to Reinit() and Compute()
   //   Memory may be reallocated on each call
@@ -211,6 +213,14 @@ class ANNImplementation
 	Descriptor* descriptor_;
 	NeuralNetwork* network_;
 
+
+  // configurations of last computation
+  int numberOfParticles_last_call_;
+  std::vector<int> particleSpecies_last_call_;
+  std::vector<double> coordinates_last_call_;
+
+  // atom layers
+  std::vector<int> in_layer_;
 
 
 	// Helper methods
@@ -278,6 +288,12 @@ class ANNImplementation
               VectorOfSizeDIM* const forces,
               double* const particleEnergy);
 
+  // assign atoms into layers
+  int CreateLayers(KIM_API_model* const pkim,
+              GetNeighborFunction* const get_neigh,
+              const int* const particleSpecies,
+              const VectorOfSizeDIM* const coordinates,
+              double const rcut_layer);
 
 };
 
@@ -304,6 +320,13 @@ int ANNImplementation::Compute(
     VectorOfSizeDIM* const forces,
     double* const particleEnergy)
 {
+
+  const int structure = 1;
+  bool use_layer = false;
+  if (structure == 1 || structure ==2) {  // 0: bulk   1: bilayer   2: trilayer
+    use_layer = true;
+  }
+
   int ier = KIM_STATUS_OK;
   const int Nparticles = cachedNumberOfParticles_;
   const int Ncontrib = cachedNumberContributingParticles_;
@@ -345,7 +368,6 @@ int ANNImplementation::Compute(
   int* n1atom = 0;
   double* pRij = 0;
   int const baseConvert = baseconvert_;
-	double const* const* const  constCutoffsSq2D = cutoffsSq2D_;
 
 	for (Iter iterator(pkim, get_neigh, baseConvert, Ncontrib, &ii, &numnei,
                      &n1atom, &pRij);
@@ -356,6 +378,11 @@ int ANNImplementation::Compute(
     int const * const n1Atom = n1atom;
     int const i = ii;
     int const iSpecies = particleSpecies[i];
+    int ilayer;
+    if (use_layer) {
+      ilayer = in_layer_[i];
+    }
+
 
     // Setup loop over neighbors of current particle
     for (int jj = 0; jj < numNei; ++jj)
@@ -363,16 +390,26 @@ int ANNImplementation::Compute(
       // adjust index of particle neighbor
       int const j = n1Atom[jj] + baseConvert;
       int const jSpecies = particleSpecies[j];
-      double rij[DIM];
+
+      // cutoff between ij
+      int jlayer;
+      if (use_layer) {
+        jlayer = in_layer_[j];
+      }
+      double rcutij;
+      if (use_layer && jlayer == ilayer) {
+        rcutij = sqrt(cutoffsSq2D_samelayer_[iSpecies][jSpecies]);
+      }
+      else {
+        rcutij = sqrt(cutoffsSq2D_[iSpecies][jSpecies]);
+      }
 
 			// Compute rij
+      double rij[DIM];
 			for (int dim = 0; dim < DIM; ++dim) {
 				rij[dim] = coordinates[j][dim] - coordinates[i][dim];
 			}
-
-      // compute distance squared
       double const rijmag = sqrt(rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2]);
-      double const rcutij = sqrt(constCutoffsSq2D[iSpecies][jSpecies]);
 
       // if particles i and j not interact
       if (rijmag > rcutij) continue;
@@ -419,6 +456,26 @@ int ANNImplementation::Compute(
         int const k = n1Atom[kk] + baseConvert;
         int const kSpecies = particleSpecies[k];
 
+        // cutoff between ik and jk
+        int klayer;
+        if (use_layer) {
+          klayer = in_layer_[k];
+        }
+        double rcutik;
+        if (use_layer && klayer == ilayer) {
+          rcutik = sqrt(cutoffsSq2D_samelayer_[iSpecies][kSpecies]);
+        }
+        else {
+          rcutik = sqrt(cutoffsSq2D_[iSpecies][kSpecies]);
+        }
+        double rcutjk;
+        if (use_layer && jlayer == ilayer && klayer == ilayer) {
+          rcutjk = sqrt(cutoffsSq2D_samelayer_[jSpecies][kSpecies]);
+        }
+        else {
+          rcutjk = sqrt(cutoffsSq2D_[jSpecies][kSpecies]);
+        }
+
         // Compute rik, rjk and their squares
         double rik[DIM];
         double rjk[DIM];
@@ -428,8 +485,6 @@ int ANNImplementation::Compute(
         }
         double const rikmag = sqrt(rik[0]*rik[0] + rik[1]*rik[1] + rik[2]*rik[2]);
         double const rjkmag = sqrt(rjk[0]*rjk[0] + rjk[1]*rjk[1] + rjk[2]*rjk[2]);
-        double const rcutik = sqrt(constCutoffsSq2D[iSpecies][kSpecies]);
-        double const rcutjk = sqrt(constCutoffsSq2D[jSpecies][kSpecies]);
 
         double const rvec[3] = {rijmag, rikmag, rjkmag};
         double const rcutvec[3] = {rcutij, rcutik, rcutjk};
@@ -469,6 +524,17 @@ int ANNImplementation::Compute(
     }  // end of first neighbor loop
   }  // end of loop over contributing particles
 
+
+  //TODO delete debug (print generalized coords not_normalized)
+/*  for(int i=0; i<Ncontrib; i++)
+  {
+    std::cout<<"i = " << i <<" ";
+    for(int j=0; j<Ndescriptors; j++) {
+      printf("%.15f ",generalizedCoords[i][j]);
+    }
+    std::cout<<std::endl;
+  }
+*/
 
   // centering and normalization
   if (descriptor_->center_and_normalize) {
@@ -525,6 +591,11 @@ int ANNImplementation::Compute(
       int const * const n1Atom = n1atom;
       int const i = ii;
       int const iSpecies = particleSpecies[i];
+      int ilayer;
+      if (use_layer) {
+        ilayer = in_layer_[i];
+      }
+
 
       // Setup loop over neighbors of current particle
       for (int jj = 0; jj < numNei; ++jj)
@@ -532,16 +603,27 @@ int ANNImplementation::Compute(
         // adjust index of particle neighbor
         int const j = n1Atom[jj] + baseConvert;
         int const jSpecies = particleSpecies[j];
-        double rij[DIM];
+
+        // cutoff between ij
+        int jlayer;
+        if (use_layer) {
+          jlayer = in_layer_[j];
+        }
+        double rcutij;
+        if (use_layer && jlayer == ilayer) {
+          rcutij = sqrt(cutoffsSq2D_samelayer_[iSpecies][jSpecies]);
+        }
+        else {
+          rcutij = sqrt(cutoffsSq2D_[iSpecies][jSpecies]);
+        }
 
         // Compute rij
+        double rij[DIM];
         for (int dim = 0; dim < DIM; ++dim) {
           rij[dim] = coordinates[j][dim] - coordinates[i][dim];
         }
-
-        // compute distance squared
         double const rijmag = sqrt(rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2]);
-        double const rcutij = sqrt(constCutoffsSq2D[iSpecies][jSpecies]);
+
 
         // if particles i and j not interact
         if (rijmag > rcutij) continue;
@@ -598,6 +680,26 @@ int ANNImplementation::Compute(
           int const k = n1Atom[kk] + baseConvert;
           int const kSpecies = particleSpecies[k];
 
+          // cutoff between ik and jk
+          int klayer;
+          if (use_layer) {
+            klayer = in_layer_[k];
+          }
+          double rcutik;
+          if (use_layer && klayer == ilayer) {
+            rcutik = sqrt(cutoffsSq2D_samelayer_[iSpecies][kSpecies]);
+          }
+          else {
+            rcutik = sqrt(cutoffsSq2D_[iSpecies][kSpecies]);
+          }
+          double rcutjk;
+          if (use_layer && jlayer == ilayer && klayer == ilayer) {
+            rcutjk = sqrt(cutoffsSq2D_samelayer_[jSpecies][kSpecies]);
+          }
+          else {
+            rcutjk = sqrt(cutoffsSq2D_[jSpecies][kSpecies]);
+          }
+
           // Compute rik, rjk and their squares
           double rik[DIM];
           double rjk[DIM];
@@ -607,8 +709,6 @@ int ANNImplementation::Compute(
           }
           double const rikmag = sqrt(rik[0]*rik[0] + rik[1]*rik[1] + rik[2]*rik[2]);
           double const rjkmag = sqrt(rjk[0]*rjk[0] + rjk[1]*rjk[1] + rjk[2]*rjk[2]);
-          double const rcutik = sqrt(constCutoffsSq2D[iSpecies][kSpecies]);
-          double const rcutjk = sqrt(constCutoffsSq2D[jSpecies][kSpecies]);
 
           double const rvec[3] = {rijmag, rikmag, rjkmag};
           double const rcutvec[3] = {rcutij, rcutik, rcutjk};
@@ -668,6 +768,8 @@ int ANNImplementation::Compute(
   } // compute force
 
 
+  // dealloate local array
+  Deallocate2DArray(generalizedCoords);
 
   // everything is good
   ier = KIM_STATUS_OK;

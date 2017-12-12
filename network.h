@@ -41,7 +41,7 @@ class NeuralNetwork
     }
 
 
-//TODO maybe delete,  for debug purpose delete
+//TODO  for debug purpose delete
     void echo_input() {
       std::cout<<"==================================="<<std::endl;
       std::cout<<"Input data for class NeuralNetwork"<<std::endl;
