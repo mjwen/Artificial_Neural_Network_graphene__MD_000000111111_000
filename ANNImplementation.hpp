@@ -414,6 +414,9 @@ int ANNImplementation::Compute(
       // if particles i and j not interact
       if (rijmag > rcutij) continue;
 
+      // allow bulk or interlayer interaction
+      if (!use_layer || (use_layer && jlayer != ilayer)) {
+
       // two-body descriptors
       for (size_t p=0; p<descriptor_->name.size(); p++) {
 
@@ -445,7 +448,7 @@ int ANNImplementation::Compute(
 
         } // loop over same descriptor but different parameter set
       } // loop over descriptors
-
+      } // bulk or interlayer interaction
 
       // three-body descriptors
       if (descriptor_->has_three_body == false) continue;
@@ -490,6 +493,8 @@ int ANNImplementation::Compute(
         double const rcutvec[3] = {rcutij, rcutik, rcutjk};
 
         if (rikmag > rcutik) continue; // three-dody not interacting
+        if (use_layer && klayer == jlayer) continue;  // only when j and k in different layer
+
 
         for (size_t p=0; p<descriptor_->name.size(); p++) {
 
@@ -526,9 +531,11 @@ int ANNImplementation::Compute(
 
 
   //TODO delete debug (print generalized coords not_normalized)
-/*  for(int i=0; i<Ncontrib; i++)
+/*  std::cout<<"# Debug descriptor values before normalization" << std::endl;
+  std::cout<<"# atom id    descriptor values ..." << std::endl;
+  for(int i=0; i<Ncontrib; i++)
   {
-    std::cout<<"i = " << i <<" ";
+    std::cout<< i <<"    ";
     for(int j=0; j<Ndescriptors; j++) {
       printf("%.15f ",generalizedCoords[i][j]);
     }
@@ -545,6 +552,20 @@ int ANNImplementation::Compute(
       }
     }
   }
+
+
+  //TODO delete debug (print generalized coords not_normalized)
+/*  std::cout<<"\n\n# Debug descriptor values after normalization" << std::endl;
+  std::cout<<"# atom id    descriptor values ..." << std::endl;
+  for(int i=0; i<Ncontrib; i++)
+  {
+    std::cout<< i <<"    ";
+    for(int j=0; j<Ndescriptors; j++) {
+      printf("%.15f ",generalizedCoords[i][j]);
+    }
+    std::cout<<std::endl;
+  }
+*/
 
 
   // NN feedforward
@@ -628,6 +649,9 @@ int ANNImplementation::Compute(
         // if particles i and j not interact
         if (rijmag > rcutij) continue;
 
+        // allow bulk or interlayer interaction
+        if (!use_layer || (use_layer && jlayer != ilayer)) {
+
         // two-body descriptors
         for (size_t p=0; p<descriptor_->name.size(); p++) {
 
@@ -669,7 +693,7 @@ int ANNImplementation::Compute(
 
           } // loop over same descriptor but different parameter set
         } // loop over descriptors
-
+        } // bulk or interlayer interaction
 
         // three-body descriptors
         if (descriptor_->has_three_body == false) continue;
@@ -714,6 +738,8 @@ int ANNImplementation::Compute(
           double const rcutvec[3] = {rcutij, rcutik, rcutjk};
 
           if (rikmag > rcutik) continue; // three-dody not interacting
+          if (use_layer && klayer == jlayer ) continue;  // only when j and k are in different layer
+
 
           for (size_t p=0; p<descriptor_->name.size(); p++) {
 

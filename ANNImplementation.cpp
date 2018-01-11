@@ -173,7 +173,8 @@ int ANNImplementation::Compute(KIM_API_model* const pkim)
                                 coordinates, energy, particleEnergy, forces);
   if (ier < KIM_STATUS_OK) return ier;
 
-
+  // TODO, we need to determine the strucutre based on the information read in from input file,
+  // based on which, we decide whether to call CreateLayers or not.
   // create layers
   CreateLayers(pkim, get_neigh, particleSpecies, coordinates, -1);
 
