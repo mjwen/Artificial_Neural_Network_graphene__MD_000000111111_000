@@ -393,12 +393,10 @@ int ANNImplementation::Compute(
 
       // cutoff between ij
       int jlayer;
+      double rcutij;
       if (use_layer) {
         jlayer = in_layer_[j];
-      }
-      double rcutij;
-      if (use_layer && jlayer == ilayer) {
-        rcutij = sqrt(cutoffsSq2D_samelayer_[iSpecies][jSpecies]);
+        rcutij = sqrt(cutoffsSq2D_[iSpecies][jSpecies]);
       }
       else {
         rcutij = sqrt(cutoffsSq2D_[iSpecies][jSpecies]);
@@ -461,21 +459,17 @@ int ANNImplementation::Compute(
 
         // cutoff between ik and jk
         int klayer;
+        double rcutik;
+        double rcutjk;
         if (use_layer) {
           klayer = in_layer_[k];
-        }
-        double rcutik;
-        if (use_layer && klayer == ilayer) {
+          rcutij = sqrt(cutoffsSq2D_samelayer_[iSpecies][jSpecies]);
           rcutik = sqrt(cutoffsSq2D_samelayer_[iSpecies][kSpecies]);
-        }
-        else {
-          rcutik = sqrt(cutoffsSq2D_[iSpecies][kSpecies]);
-        }
-        double rcutjk;
-        if (use_layer && jlayer == ilayer && klayer == ilayer) {
           rcutjk = sqrt(cutoffsSq2D_samelayer_[jSpecies][kSpecies]);
         }
         else {
+          rcutij = sqrt(cutoffsSq2D_[iSpecies][jSpecies]);
+          rcutik = sqrt(cutoffsSq2D_[iSpecies][kSpecies]);
           rcutjk = sqrt(cutoffsSq2D_[jSpecies][kSpecies]);
         }
 
@@ -493,8 +487,8 @@ int ANNImplementation::Compute(
         double const rcutvec[3] = {rcutij, rcutik, rcutjk};
 
         if (rikmag > rcutik) continue; // three-dody not interacting
-        if (use_layer && klayer == jlayer) continue;  // only when j and k in different layer
-
+        if (use_layer && jlayer != ilayer && klayer != ilayer) continue;  // one of j, k should be in same layer as i
+        if (use_layer && jlayer == ilayer && klayer == ilayer) continue;  // i,j,k should not be in the same layer
 
         for (size_t p=0; p<descriptor_->name.size(); p++) {
 
@@ -627,12 +621,10 @@ int ANNImplementation::Compute(
 
         // cutoff between ij
         int jlayer;
+        double rcutij;
         if (use_layer) {
           jlayer = in_layer_[j];
-        }
-        double rcutij;
-        if (use_layer && jlayer == ilayer) {
-          rcutij = sqrt(cutoffsSq2D_samelayer_[iSpecies][jSpecies]);
+          rcutij = sqrt(cutoffsSq2D_[iSpecies][jSpecies]);
         }
         else {
           rcutij = sqrt(cutoffsSq2D_[iSpecies][jSpecies]);
@@ -706,21 +698,17 @@ int ANNImplementation::Compute(
 
           // cutoff between ik and jk
           int klayer;
+          double rcutik;
+          double rcutjk;
           if (use_layer) {
             klayer = in_layer_[k];
-          }
-          double rcutik;
-          if (use_layer && klayer == ilayer) {
+            rcutij = sqrt(cutoffsSq2D_samelayer_[iSpecies][jSpecies]);
             rcutik = sqrt(cutoffsSq2D_samelayer_[iSpecies][kSpecies]);
-          }
-          else {
-            rcutik = sqrt(cutoffsSq2D_[iSpecies][kSpecies]);
-          }
-          double rcutjk;
-          if (use_layer && jlayer == ilayer && klayer == ilayer) {
             rcutjk = sqrt(cutoffsSq2D_samelayer_[jSpecies][kSpecies]);
           }
           else {
+            rcutij = sqrt(cutoffsSq2D_[iSpecies][jSpecies]);
+            rcutik = sqrt(cutoffsSq2D_[iSpecies][kSpecies]);
             rcutjk = sqrt(cutoffsSq2D_[jSpecies][kSpecies]);
           }
 
@@ -738,8 +726,8 @@ int ANNImplementation::Compute(
           double const rcutvec[3] = {rcutij, rcutik, rcutjk};
 
           if (rikmag > rcutik) continue; // three-dody not interacting
-          if (use_layer && klayer == jlayer ) continue;  // only when j and k are in different layer
-
+          if (use_layer && jlayer != ilayer && klayer != ilayer) continue;  // one of j, k should be in same layer as i
+          if (use_layer && jlayer == ilayer && klayer == ilayer) continue;  // i,j,k should not be in the same layer
 
           for (size_t p=0; p<descriptor_->name.size(); p++) {
 
