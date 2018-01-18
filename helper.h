@@ -2,6 +2,10 @@
 #define HELPER_H_
 
 // helper routine declarations
+void AllocateAndInitialize3DArray(double***& arrayPtr, int const extentZero,
+                                  int const extentOne, int const extentTwo);
+void Deallocate3DArray(double***& arrayPtr);
+
 void AllocateAndInitialize2DArray(double**& arrayPtr, int const extentZero,
                                   int const extentOne);
 void Deallocate2DArray(double**& arrayPtr);
