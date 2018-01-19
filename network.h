@@ -72,7 +72,6 @@ class NeuralNetwork
     std::vector<RowVectorXd> biases_;
     std::vector<RowMatrixXd> preactiv_;
     RowMatrixXd activOutputLayer_;
-    RowVectorXd delta_;
     RowMatrixXd gradInput_;
 
 

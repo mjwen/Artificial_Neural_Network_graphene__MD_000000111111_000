@@ -1108,15 +1108,18 @@ int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
     double const rcut_layer)
 {
 
+  const int Npart =  cachedNumberOfParticles_;
+  const int Ncontrib = cachedNumberContributingParticles_;
+
   // determine whether need to re-assign atoms to layer
   bool need_create = false;
 
   // number of particles changed?
-  if (numberOfParticles_last_call_ != cachedNumberOfParticles_) {
+  if (numberOfParticles_last_call_ != Npart) {
     need_create = true;
   }
   else {
-    for (int i=0; i<cachedNumberOfParticles_; i++) {
+    for (int i=0; i<Npart; i++) {
 
       // particle species changed?
       if (particleSpecies_last_call_[i] != particleSpecies[i]) {
@@ -1133,10 +1136,11 @@ int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
   if (!need_create) return 0;
 
 
+
   // assign atoms to layers
 
   // backup particle species and coordinates info
-  numberOfParticles_last_call_ = cachedNumberOfParticles_;
+  numberOfParticles_last_call_ = Npart;
   particleSpecies_last_call_.resize(numberOfParticles_last_call_);
   coordinates_last_call_.resize(DIM*numberOfParticles_last_call_);
   for (int i=0; i<numberOfParticles_last_call_; i++) {
@@ -1154,10 +1158,10 @@ int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
   }
   else {   // max of min of pair distance is rcut_layer
 
-    std::vector<double> min_rsq(cachedNumberOfParticles_, 1e10);
+    std::vector<double> min_rsq(Npart, 1e10);
 
 
-    for (int i=0; i<cachedNumberOfParticles_; i++) {
+    for (int i=0; i<Npart; i++) {
       // get neighbors of atom i
       int one = 1;
       int numnei;
@@ -1199,12 +1203,11 @@ int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
 
   // layers
   int nremain; // number of atoms not included in any layer
-  int nlayers;
 
   // init vars
-  nlayers = 1;
-  nremain = cachedNumberOfParticles_;
-  in_layer_.assign(cachedNumberOfParticles_, -1); // -1 means atoms not in any layer
+  nlayers_ = 1;
+  nremain = Npart;
+  in_layer_.assign(Npart, -1); // -1 means atoms not in any layer
 
   // create all layers
   while(true) {
@@ -1213,8 +1216,8 @@ int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
     std::vector<int> layer(nremain, -1);
 
     // find an atom not incldued in any layer and start with it
-    int currentLayer = nlayers - 1;
-    for (int k=0; k<cachedNumberOfParticles_; k++) {
+    int currentLayer = nlayers_ - 1;
+    for (int k=0; k<Npart; k++) {
       if (in_layer_[k] == -1) {
         in_layer_[k] = currentLayer;
         layer[0] = k; // first atom in current layer
@@ -1282,20 +1285,57 @@ int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
 
     } // finding atoms in one layer
 
+    // store atoms in layer_all_
+    layer.resize(nin);
+    layers_all_.push_back(layer);
+    std::vector<int> contrib;
+    for (size_t i=0; i < layer.size(); i++) {
+      if (layer[i] < Ncontrib) {
+        contrib.push_back(layer[i]);
+      }
+    }
+    layers_contrib_.push_back(contrib);
+
     nremain -= nin;
     if (nremain == 0) break;
-    nlayers += 1;
+    nlayers_ += 1;
   } // finding atoms in all layers
 
 
+  //TODO right now only for bilayer
+  if (nlayers_ !=2) {
+    std::cerr<<"Error: KIM ANN Model, "<<nlayers_<<" detected. Should be 2."<<std::endl;
+  }
+
+
+/*
   //TODO delete debug
-/*    std::cout<<"Cutoff for layer "<<sqrt(cutsq_layer)<<std::endl;
-      std::cout <<"Number of layers: " <<nlayers <<std::endl;
-      std::cout <<"#atom id     layer"<<std::endl;
-      for (int i=0; i<cachedNumberOfParticles_; i++) {
-      std::cout <<i <<"         "<<in_layer_[i]<<std::endl;
-      }
+  std::cout<<"Cutoff for layer "<<sqrt(cutsq_layer)<<std::endl;
+  std::cout <<"Number of layers: " <<nlayers_ <<std::endl;
+  std::cout <<"#atom id    layer    coords"<<std::endl;
+  for (int i=0; i<Npart; i++) {
+    std::cout <<i <<" "<<in_layer_[i]<<" "<<coordinates[i][0]<<" "<<coordinates[i][1]<<" "<<coordinates[i][2]<<std::endl;
+  }
+
+  std::cout <<"Number of layers from layers_all_: " <<layers_all_.size() <<std::endl;
+  for (size_t i=0; i<layers_all_.size(); i++) {
+
+    std::cout <<"=================================" <<std::endl;
+    std::cout <<"number of atoms in layer " << i <<" : " << layers_all_[i].size() <<std::endl;
+    for (size_t j=0; j<layers_all_[i].size(); j++) {
+      std::cout << layers_all_[i][j] << " ";
+    }
+    std::cout <<std::endl;
+    std::cout <<"number of contributing atoms in layer " << i <<" : " << layers_contrib_[i].size() <<std::endl;
+    for (size_t j=0; j<layers_contrib_[i].size(); j++) {
+      std::cout << layers_contrib_[i][j] << " ";
+    }
+    std::cout <<std::endl <<std::endl;
+  }
+
 */
+
+
 
   return 0;
 }
