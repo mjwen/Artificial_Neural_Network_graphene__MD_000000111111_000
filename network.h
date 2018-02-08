@@ -24,6 +24,7 @@ class NeuralNetwork
 
     void set_nn_structure(int input_size, int num_layers, int* layer_sizes);
     void set_activation(char* name);
+    void set_keep_prob(double* keep_prob);
     void add_weight_bias(double** weight, double* bias, int layer);
     void forward(double * zeta, const int rows, const int cols);
     void backward();
@@ -63,17 +64,21 @@ class NeuralNetwork
 
 
   private:
-    int inputSize_;         // size of input layer
-    int Nlayers_;           // number of layers, including output, excluding input
+    int inputSize_;  // size of input layer
+    int Nlayers_;  // number of layers, including output, excluding input
     std::vector<int> layerSizes_;  // number of perceptrons in each layer
     ActivationFunction activFunc_;
     ActivationFunctionDerivative activFuncDeriv_;
     std::vector<RowMatrixXd> weights_;
     std::vector<RowVectorXd> biases_;
     std::vector<RowMatrixXd> preactiv_;
+    std::vector<double> keep_prob_;
+    std::vector<RowMatrixXd> keep_prob_binary_;
     RowMatrixXd activOutputLayer_;
     RowMatrixXd gradInput_;
 
+    // dropout
+    RowMatrixXd dropout_(RowMatrixXd const& x, int layer);
 
 
 };

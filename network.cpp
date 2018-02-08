@@ -18,6 +18,8 @@ void NeuralNetwork::set_nn_structure(int size_input, int num_layers,
   weights_.resize(Nlayers_);
   biases_.resize(Nlayers_);
   preactiv_.resize(Nlayers_);
+  keep_prob_.resize(Nlayers_);
+  keep_prob_binary_.resize(Nlayers_);
 }
 
 void NeuralNetwork::set_activation(char* name) {
@@ -36,6 +38,12 @@ void NeuralNetwork::set_activation(char* name) {
   else if (strcmp(name, "elu") == 0) {
     activFunc_ = &elu;
     activFuncDeriv_ = &elu_derivative;
+  }
+}
+
+void NeuralNetwork::set_keep_prob(double* keep_prob) {
+  for (int i=0; i<Nlayers_; i++) {
+    keep_prob_[i] = keep_prob[i];
   }
 }
 
@@ -68,27 +76,32 @@ void NeuralNetwork::add_weight_bias(double** weight, double* bias, int layer)
   // store in vector
   weights_[layer] = w;
   biases_[layer] = b;
-
 }
 
 void NeuralNetwork::forward(double * zeta, const int rows, const int cols)
 {
+
   RowMatrixXd act;
 
   // map raw C++ data into Matrix data
   // see: https://eigen.tuxfamily.org/dox/group__TutorialMapClass.html
   Map<RowMatrixXd> activation(zeta, rows, cols);
+  act = activation;
 
   for (int i=0; i<Nlayers_; i++) {
-    preactiv_[i] = (activation * weights_[i]).rowwise() + biases_[i];
+
+    // apply dropout
+    if (static_cast<int>(keep_prob_[i]) != 1) {
+      act = dropout_(act, i);  // no aliasing will occur for act
+    }
+
+    preactiv_[i] = (act * weights_[i]).rowwise() + biases_[i];
+
     if (i == Nlayers_ - 1) {  // output layer (no activation function applied)
       activOutputLayer_ = preactiv_[i];
     }
     else {
       act = activFunc_(preactiv_[i]);
-      // cannot assign activFunc_(...) directly to activation.
-      // Changing the mapped matrix `activation' does not invoke memory reallocation
-      new (&activation) Map<RowMatrixXd> (act.data(), act.rows(), act.cols());
     }
   }
 }
@@ -101,19 +114,65 @@ void NeuralNetwork::backward()
   int cols  = preactiv_[Nlayers_-1].cols();
 
   // error at output layer
-  RowMatrixXd delta_ = RowMatrixXd::Constant(rows, cols, 1.0);
+  RowMatrixXd delta = RowMatrixXd::Constant(rows, cols, 1.0);
 
   for (int i = Nlayers_ - 2; i>=0; i--) {
-    // eval() is used to prevent aliasing since delta_ is both lvalue and rvalue.
-    delta_ =  ( delta_ * weights_[i+1].transpose() ).eval()
-        .cwiseProduct( activFuncDeriv_(preactiv_[i]) )  ;
+    // eval() is used to prevent aliasing since delta is both lvalue and rvalue.
+    delta = ( delta * weights_[i+1].transpose() ).eval()
+        .cwiseProduct(activFuncDeriv_(preactiv_[i]));
+
+    // apply dropout
+    if (static_cast<int>(keep_prob_[i]) != 1) {
+      delta = delta.cwiseProduct(keep_prob_binary_[i+1]) / keep_prob_[i+1];  // no aliasing will occur
+    }
   }
 
   // derivative of cost (energy E) w.r.t to input (generalized coords)
-  gradInput_ = delta_ * weights_[0].transpose();
+  if (static_cast<int>(keep_prob_[0]) != 1) {
+    gradInput_ = (delta * weights_[0].transpose()).cwiseProduct(keep_prob_binary_[0])/keep_prob_[0];
+  }
+  else {
+    gradInput_ = delta * weights_[0].transpose();
+  }
+
 }
 
 
+// dropout
+RowMatrixXd NeuralNetwork::dropout_(RowMatrixXd const& x, int layer)
+{
+
+  RowMatrixXd y;
+  double keep_prob = keep_prob_[layer];
+
+  if (static_cast<int>(keep_prob) != 1) {
+    // uniform [-1, 1]
+    RowMatrixXd random = RowMatrixXd::Random(x.rows(), x.cols());
+    // uniform [keep_prob, 1+keep_prob]
+    random = (random/2.).array() + (0.5 + keep_prob);
+
+    keep_prob_binary_[layer] = random.array().floor();
+
+    //TODO delete  This is for debug pourpose, should be used together with `openkim-fit/tests/test_ann_force_dropout.py`
+    bool debug = false;
+    if (debug) {
+      keep_prob_binary_[layer] = RowMatrixXd::Ones(x.rows(), x.cols());
+      keep_prob_binary_[layer](0,0) = 0.;
+      keep_prob_binary_[layer](0,5) = 0.;
+      keep_prob_binary_[layer](1,2) = 0.;
+      keep_prob_binary_[layer](1,7) = 0.;
+      keep_prob_binary_[layer](3,2) = 0.;
+      keep_prob_binary_[layer](3,5) = 0.;
+    }
+
+    y = (x/keep_prob).cwiseProduct(keep_prob_binary_[layer]);
+  }
+  else {
+    y = x;
+  }
+
+  return y;
+}
 
 
 //*****************************************************************************

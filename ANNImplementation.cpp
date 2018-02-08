@@ -304,8 +304,6 @@ int ANNImplementation::ProcessParameterFiles(
   // network
   int numLayers;
   int* numPerceptrons;
-	double** weight;
-	double* bias;
 
   //char spec1[MAXLINE], spec2[MAXLINE];
   //int iIndex, jIndex , indx, iiIndex, jjIndex;
@@ -562,6 +560,7 @@ int ANNImplementation::ProcessParameterFiles(
     fclose(parameterFilePointers[0]);
     return ier;
   }
+
   // number of perceptrons in each layer
   numPerceptrons = new int[numLayers];
   getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
@@ -574,6 +573,7 @@ int ANNImplementation::ProcessParameterFiles(
     fclose(parameterFilePointers[0]);
     return ier;
   }
+
   // copy to network class
   network_->set_nn_structure(numDescs, numLayers, numPerceptrons);
 
@@ -582,7 +582,7 @@ int ANNImplementation::ProcessParameterFiles(
   getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
   ier = sscanf(nextLine, "%s", name);
   if (ier != 1) {
-    sprintf(errorMsg, "unable to read activation function from line:\n");
+    sprintf(errorMsg, "unable to read `activation function` from line:\n");
     strcat(errorMsg, nextLine);
     ier = KIM_STATUS_FAIL;
     pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
@@ -597,8 +597,8 @@ int ANNImplementation::ProcessParameterFiles(
       && strcmp(name, "relu") != 0
       && strcmp(name, "elu") != 0)
   {
-    sprintf(errorMsg, "unsupported activation function. Expecting `sigmoid', `tanh' "
-        " `relu' or `elu', given %s.\n", name);
+    sprintf(errorMsg, "unsupported activation function. Expecting `sigmoid`, `tanh` "
+        " `relu` or `elu`, given %s.\n", name);
     ier = KIM_STATUS_FAIL;
     pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
     fclose(parameterFilePointers[0]);
@@ -606,12 +606,32 @@ int ANNImplementation::ProcessParameterFiles(
   network_->set_activation(name);
 
 
+  // keep probability
+  double* keep_prob;
+  AllocateAndInitialize1DArray(keep_prob, numLayers);
+
+  getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
+  ier = getXdouble(nextLine, numLayers, keep_prob);
+  if (ier != KIM_STATUS_OK) {
+    sprintf(errorMsg, "unable to read `keep probability` from line:\n");
+    strcat(errorMsg, nextLine);
+    ier = KIM_STATUS_FAIL;
+    pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
+    fclose(parameterFilePointers[0]);
+    return ier;
+  }
+  network_->set_keep_prob(keep_prob);
+  Deallocate1DArray(keep_prob);
+
+
   // weights and biases
   for (int i=0; i<numLayers; i++) {
 
-    // weights
+    double** weight;
+	  double* bias;
     int row;
     int col;
+
     if (i==0) {
       row = numDescs;
       col = numPerceptrons[i];
@@ -625,7 +645,7 @@ int ANNImplementation::ProcessParameterFiles(
       getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
       ier = getXdouble(nextLine, col, weight[j]);
       if (ier != KIM_STATUS_OK) {
-        sprintf(errorMsg, "unable to read weight from line:\n");
+        sprintf(errorMsg, "unable to read `weight` from line:\n");
         strcat(errorMsg, nextLine);
         ier = KIM_STATUS_FAIL;
         pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
@@ -639,7 +659,7 @@ int ANNImplementation::ProcessParameterFiles(
     getNextDataLine(parameterFilePointers[0], nextLine, MAXLINE, &endOfFileFlag);
     ier = getXdouble(nextLine, col, bias);
     if (ier != KIM_STATUS_OK) {
-      sprintf(errorMsg, "unable to read bias from line:\n");
+      sprintf(errorMsg, "unable to read `bias` from line:\n");
       strcat(errorMsg, nextLine);
       ier = KIM_STATUS_FAIL;
       pkim->report_error(__LINE__, __FILE__, errorMsg, ier);
@@ -649,6 +669,7 @@ int ANNImplementation::ProcessParameterFiles(
 
     // copy to network class
     network_->add_weight_bias(weight, bias, i);
+
     Deallocate2DArray(weight);
     Deallocate1DArray(bias);
   }
