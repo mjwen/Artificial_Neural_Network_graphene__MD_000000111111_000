@@ -361,7 +361,7 @@ int ANNImplementation::Compute(
       const std::vector<int> lr2 = layers_all_[j_lr];
       const std::vector<int> lr_con2 = layers_contrib_[j_lr];
 
-      // conbine atoms in layer1 and layer2 into one vector
+      // combine atoms in layer1 and layer2 into one vector
       std::vector<int> lr_1and2(lr1);
       std::vector<int> lr_con_1and2(lr_con1);
       lr_1and2.insert(lr_1and2.end(), lr2.begin(), lr2.end());
@@ -627,32 +627,58 @@ int ANNImplementation::Compute(
        */
 
 
-      // NN feedforward
-      network_->forward(GC[0], Ncontrib, Ndescriptors);
-      // NN backpropagation to compute derivative of energy w.r.t generalized coords
-      network_->backward();
+      double E_avg;
+      double* Epart_avg;
+      double** dEdGC_avg;
+      E_avg = 0;
+      AllocateAndInitialize1DArray(Epart_avg, Ncontrib);
+      AllocateAndInitialize2DArray(dEdGC_avg, Ncontrib, Ndescriptors);
 
-      // get access to derivatives of energy w.r.t generalized coords
-      double** dEdGC;
-      int extentZero = Ncontrib;
-      int extentOne = Ndescriptors;
-      dEdGC = new double*[extentZero];
-      dEdGC[0] = network_->get_grad_input();
-      for (int i = 1; i < extentZero; ++i) {
-        dEdGC[i] = dEdGC[i-1] + extentOne;
+      // do multiple runs to get the average
+      int NUM_EVALS = 50;
+      for(int iev=0; iev<NUM_EVALS; iev++) {
+
+        // NN feedforward
+        network_->forward(GC[0], Ncontrib, Ndescriptors);
+
+        if (isComputeEnergy == true) {
+          E_avg += network_->get_sum_output() / NUM_EVALS;
+        }
+
+        if (isComputeParticleEnergy == true) {
+          double* Epart;
+          Epart = network_->get_output();
+          for (int i=0; i<Ncontrib; i++) {
+            Epart_avg[i] += Epart[i] / NUM_EVALS;
+          }
+        }
+
+        if (need_forces) {
+
+          // NN backpropagation to compute derivative of energy w.r.t generalized coords
+          network_->backward();
+          double* dEdGC;
+          dEdGC = network_->get_grad_input();
+          for (int i=0; i<Ncontrib; i++) {
+            for (int j=0; j<Ndescriptors; j++) {
+              dEdGC_avg[i][j] += dEdGC[i*Ndescriptors + j] / NUM_EVALS;
+            }
+          }
+
+        }
+
       }
+
 
       // Contribution to energy
       if (isComputeEnergy == true) {
-        *energy += network_->get_sum_output();
+        *energy += E_avg;
       }
 
       // Contribution to particle energy
       if (isComputeParticleEnergy == true) {
-        double* Epart;
-        Epart = network_->get_output();
         for (int i=0; i<Ncontrib; i++) {
-          particleEnergy[lr_con_1and2[i]] += Epart[i];
+          particleEnergy[lr_con_1and2[i]] += Epart_avg[i];
         }
       }
 
@@ -662,7 +688,7 @@ int ANNImplementation::Compute(
           for (int j=0; j<Ndescriptors; j++)
             for (int k=0; k<Nparticles; k++)
               for (int kdim=0; kdim<DIM; kdim++) {
-                forces[lr_1and2[k]][kdim] += dEdGC[i][j] * dGCdr[i][j][k*DIM + kdim];
+                forces[lr_1and2[k]][kdim] += dEdGC_avg[i][j] * dGCdr[i][j][k*DIM + kdim];
               }
       }
 
@@ -670,7 +696,8 @@ int ANNImplementation::Compute(
       // dealloate local array
       Deallocate2DArray(GC);
       Deallocate3DArray(dGCdr);
-      delete [] dEdGC;
+      Deallocate1DArray(Epart_avg);
+      Deallocate2DArray(dEdGC_avg);
 
     } // loop over j_lr
   }  // loop over i_lr
