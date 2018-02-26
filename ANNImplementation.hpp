@@ -352,354 +352,348 @@ int ANNImplementation::Compute(
   }
 
 
+  // NOTE, for intralayer interactions, we do not need the outermost layer to separate
+  // atoms into layers. Can do it as other kim potentials just loop over all the
+  // contributing atoms, and check wheter the atoms are in the same layer.
+  // We do this because we are planning to incorporate this together with the interlayer
+  // potential, where we have to separate the layers. Another benefits is that this
+  // requires less memory for GC and dGCdr, especially for dGCdr.
+  //
+
   for (int i_lr=0; i_lr < nlayers_; i_lr++) {
-    const std::vector<int> lr1 = layers_all_[i_lr];
-    const std::vector<int> lr_con1 = layers_contrib_[i_lr];
 
-    for (int j_lr=i_lr+1; j_lr < nlayers_; j_lr++) {
+    const std::vector<int> lr = layers_all_[i_lr];
+    const std::vector<int> lr_con = layers_contrib_[i_lr];
+    const int Nparticles = lr.size();
+    const int Ncontrib = lr_con.size();
 
-      const std::vector<int> lr2 = layers_all_[j_lr];
-      const std::vector<int> lr_con2 = layers_contrib_[j_lr];
-
-      // combine atoms in layer1 and layer2 into one vector
-      std::vector<int> lr_1and2(lr1);
-      std::vector<int> lr_con_1and2(lr_con1);
-      lr_1and2.insert(lr_1and2.end(), lr2.begin(), lr2.end());
-      lr_con_1and2.insert(lr_con_1and2.end(), lr_con2.begin(), lr_con2.end());
-
-      const int Nparticles = lr_1and2.size();
-      const int Ncontrib = lr_con_1and2.size();
-
-      // setting up generalzied coords matrix and the its derivative w.r.t. atomic coords
-      double** GC;
-      double*** dGCdr;
-      const int Ndescriptors = descriptor_->get_num_descriptors();
-      AllocateAndInitialize2DArray(GC, Ncontrib, Ndescriptors);
-      AllocateAndInitialize3DArray(dGCdr, Ncontrib, Ndescriptors, DIM*Nparticles);
+    // setting up generalzied coords matrix and the its derivative w.r.t. atomic coords
+    double** GC;
+    double*** dGCdr;
+    const int Ndescriptors = descriptor_->get_num_descriptors();
+    AllocateAndInitialize2DArray(GC, Ncontrib, Ndescriptors);
+    AllocateAndInitialize3DArray(dGCdr, Ncontrib, Ndescriptors, DIM*Nparticles);
 
 
-      // calculate generalized coordiantes
-      //
-      // Setup loop over contributing particles
-      for (int ii=0; ii<Ncontrib; ii++) {
+    // calculate generalized coordiantes
+    //
+    // Setup loop over contributing particles
+    for (int ii=0; ii<Ncontrib; ii++) {
 
-        int i = lr_con_1and2[ii];
-        int const iii = std::distance(lr_1and2.begin(), std::find(lr_1and2.begin(), lr_1and2.end(), i));
-        int const iSpecies = particleSpecies[i];
-        int const ilayer = in_layer_[i];
+      int i = lr_con[ii];
+      int const iii = std::distance(lr.begin(), std::find(lr.begin(), lr.end(), i)); // index of atom i in `lr`
+      int const iSpecies = particleSpecies[i];
+      int const ilayer = in_layer_[i];
 
-        // get neighbors of atom i
-        int one = 1;
-        int dummy;
-        int numnei = 0;
-        int* n1atom = 0;
-        double* pRij = 0;
-        int const baseConvert = baseconvert_;
-        get_neigh( reinterpret_cast<void**>(const_cast<KIM_API_model**>(&pkim)),
-            &one, &i, &dummy, &numnei, &n1atom, &pRij);
+      // get neighbors of atom i
+      int one = 1;
+      int dummy;
+      int numnei = 0;
+      int* n1atom = 0;
+      double* pRij = 0;
+      int const baseConvert = baseconvert_;
+      int request = i - baseConvert;
+      get_neigh( reinterpret_cast<void**>(const_cast<KIM_API_model**>(&pkim)),
+          &one, &request, &dummy, &numnei, &n1atom, &pRij);
 
-        int const numNei = numnei;
-        int const * const n1Atom = n1atom;
+      int const numNei = numnei;
+      int const * const n1Atom = n1atom;
 
-        // Setup loop over neighbors of current particle
-        for (int jj = 0; jj < numNei; ++jj)
-        {
-          // adjust index of particle neighbor
-          int const j = n1Atom[jj] + baseConvert;
-          int const jlayer = in_layer_[j];
-          if (jlayer != i_lr && jlayer != j_lr) continue;  // needs to be in the current two layers
+      // Setup loop over neighbors of current particle
+      for (int jj = 0; jj < numNei; ++jj)
+      {
+        // adjust index of particle neighbor
+        int const j = n1Atom[jj] + baseConvert;
+        int const jlayer = in_layer_[j];
+        if (jlayer != ilayer) continue;  // needs to be in the same layers
 
-          int const jjj = std::distance(lr_1and2.begin(), std::find(lr_1and2.begin(), lr_1and2.end(), j));
-          int const jSpecies = particleSpecies[j];
+        int const jjj = std::distance(lr.begin(), std::find(lr.begin(), lr.end(), j));
+        int const jSpecies = particleSpecies[j];
 
-          // cutoff between ij
-          double rcutij = sqrt(cutoffsSq2D_[iSpecies][jSpecies]);
+        // cutoff between ij
+        double rcutij = sqrt(cutoffsSq2D_[iSpecies][jSpecies]);
 
-          // Compute rij
-          double rij[DIM];
-          for (int dim = 0; dim < DIM; ++dim) {
-            rij[dim] = coordinates[j][dim] - coordinates[i][dim];
+        // Compute rij
+        double rij[DIM];
+        for (int dim = 0; dim < DIM; ++dim) {
+          rij[dim] = coordinates[j][dim] - coordinates[i][dim];
+        }
+        double const rijmag = sqrt(rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2]);
+
+        // if particles i and j not interact
+        if (rijmag > rcutij) continue;
+
+        // Note, this part can be packed into a function as Behler 2001
+        // Then we can support other descriptors
+        // two-body descriptors
+        for (size_t p=0; p<descriptor_->name.size(); p++) {
+
+          if (descriptor_->name[p] != "g1" &&
+              descriptor_->name[p] != "g2" &&
+              descriptor_->name[p] != "g3") {
+            continue;
           }
-          double const rijmag = sqrt(rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2]);
+          int idx = descriptor_->starting_index[p];
 
-          // if particles i and j not interact
-          if (rijmag > rcutij) continue;
+          for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
 
-          // two-body only between layers
-          if (jlayer != ilayer) {
-
-            // two-body descriptors
-            for (size_t p=0; p<descriptor_->name.size(); p++) {
-
-              if (descriptor_->name[p] != "g1" &&
-                  descriptor_->name[p] != "g2" &&
-                  descriptor_->name[p] != "g3") {
-                continue;
+            double gc;
+            double dgcdr_two;
+            if (descriptor_->name[p] == "g1") {
+              if (need_forces) {
+                descriptor_->sym_d_g1(rijmag, rcutij, gc, dgcdr_two);
+              } else {
+                descriptor_->sym_g1(rijmag, rcutij, gc);
               }
-              int idx = descriptor_->starting_index[p];
-
-              for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
-
-                double gc;
-                double dgcdr_two;
-                if (descriptor_->name[p] == "g1") {
-                  if (need_forces) {
-                    descriptor_->sym_d_g1(rijmag, rcutij, gc, dgcdr_two);
-                  } else {
-                    descriptor_->sym_g1(rijmag, rcutij, gc);
-                  }
-                }
-                else if (descriptor_->name[p] == "g2") {
-                  double eta = descriptor_->params[p][q][0];
-                  double Rs = descriptor_->params[p][q][1];
-                  if (need_forces) {
-                    descriptor_->sym_d_g2(eta, Rs, rijmag, rcutij, gc, dgcdr_two);
-                  } else {
-                    descriptor_->sym_g2(eta, Rs, rijmag, rcutij, gc);
-                  }
-                }
-                else if (descriptor_->name[p] == "g3") {
-                  double kappa = descriptor_->params[p][q][0];
-                  if (need_forces) {
-                    descriptor_->sym_d_g3(kappa, rijmag, rcutij, gc, dgcdr_two);
-                  } else {
-                    descriptor_->sym_g3(kappa, rijmag, rcutij, gc);
-                  }
-                }
-
-                GC[ii][idx] += gc;
-                if (need_forces) {
-                  for (int kdim = 0; kdim < DIM; ++kdim) {
-                    double pair = dgcdr_two*rij[kdim]/rijmag;
-                    dGCdr[ii][idx][iii*DIM+kdim] += pair;
-                    dGCdr[ii][idx][jjj*DIM+kdim] -= pair;
-                  }
-                }
-                idx += 1;
-
-              } // loop over same descriptor but different parameter set
-            } // loop over descriptors
-          } // two-body
-
-          // three-body descriptors
-          if (descriptor_->has_three_body == false) continue;
-
-          for (int kk = jj+1; kk < numNei; ++kk) {
-
-            // adjust index of particle neighbor
-            int const k = n1Atom[kk] + baseConvert;
-            int const klayer = in_layer_[k];
-            if (klayer != i_lr && klayer != j_lr) continue;  // should be in the current 2 layers
-            if (jlayer != ilayer && klayer != ilayer) continue;  // one of j, k should be in same layer as i
-            if (jlayer == ilayer && klayer == ilayer) continue;  // i,j,k should not be in the same layer
-
-            int const kkk = std::distance(lr_1and2.begin(), std::find(lr_1and2.begin(), lr_1and2.end(), k));
-            int const kSpecies = particleSpecies[k];
-
-            // cutoff between ik and jk
-            double const rcutij = sqrt(cutoffsSq2D_samelayer_[iSpecies][jSpecies]);
-            double const rcutik = sqrt(cutoffsSq2D_samelayer_[iSpecies][kSpecies]);
-            double const rcutjk = sqrt(cutoffsSq2D_samelayer_[jSpecies][kSpecies]);
-
-            // Compute rik, rjk and their squares
-            double rik[DIM];
-            double rjk[DIM];
-            for (int dim = 0; dim < DIM; ++dim) {
-              rik[dim] = coordinates[k][dim] - coordinates[i][dim];
-              rjk[dim] = coordinates[k][dim] - coordinates[j][dim];
             }
-            double const rikmag = sqrt(rik[0]*rik[0] + rik[1]*rik[1] + rik[2]*rik[2]);
-            double const rjkmag = sqrt(rjk[0]*rjk[0] + rjk[1]*rjk[1] + rjk[2]*rjk[2]);
-
-            double const rvec[3] = {rijmag, rikmag, rjkmag};
-            double const rcutvec[3] = {rcutij, rcutik, rcutjk};
-
-            if (rikmag > rcutik) continue; // three-dody not interacting
-
-            for (size_t p=0; p<descriptor_->name.size(); p++) {
-
-              if (descriptor_->name[p] != "g4" &&
-                  descriptor_->name[p] != "g5") {
-                continue;
+            else if (descriptor_->name[p] == "g2") {
+              double eta = descriptor_->params[p][q][0];
+              double Rs = descriptor_->params[p][q][1];
+              if (need_forces) {
+                descriptor_->sym_d_g2(eta, Rs, rijmag, rcutij, gc, dgcdr_two);
+              } else {
+                descriptor_->sym_g2(eta, Rs, rijmag, rcutij, gc);
               }
-              int idx = descriptor_->starting_index[p];
+            }
+            else if (descriptor_->name[p] == "g3") {
+              double kappa = descriptor_->params[p][q][0];
+              if (need_forces) {
+                descriptor_->sym_d_g3(kappa, rijmag, rcutij, gc, dgcdr_two);
+              } else {
+                descriptor_->sym_g3(kappa, rijmag, rcutij, gc);
+              }
+            }
 
-              for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
+            GC[ii][idx] += gc;
+            if (need_forces) {
+              for (int kdim = 0; kdim < DIM; ++kdim) {
+                double pair = dgcdr_two*rij[kdim]/rijmag;
+                dGCdr[ii][idx][iii*DIM+kdim] += pair;
+                dGCdr[ii][idx][jjj*DIM+kdim] -= pair;
+              }
+            }
+            idx += 1;
 
-                double gc;
-                double dgcdr_three[3];
-                if (descriptor_->name[p] == "g4") {
-                  double zeta = descriptor_->params[p][q][0];
-                  double lambda = descriptor_->params[p][q][1];
-                  double eta = descriptor_->params[p][q][2];
-                  if (need_forces) {
-                    descriptor_->sym_d_g4(zeta, lambda, eta, rvec, rcutvec, gc, dgcdr_three);
-                  } else {
-                    descriptor_->sym_g4(zeta, lambda, eta, rvec, rcutvec, gc);
-                  }
-                }
-                else if (descriptor_->name[p] == "g5") {
-                  double zeta = descriptor_->params[p][q][0];
-                  double lambda = descriptor_->params[p][q][1];
-                  double eta = descriptor_->params[p][q][2];
-                  if (need_forces) {
-                    descriptor_->sym_d_g5(zeta, lambda, eta, rvec, rcutvec, gc, dgcdr_three);
-                  } else {
-                    descriptor_->sym_g5(zeta, lambda, eta, rvec, rcutvec, gc);
-                  }
-                }
+          } // loop over same descriptor but different parameter set
+        } // loop over descriptors
 
-                GC[ii][idx] += gc;
+        // three-body descriptors
+        if (descriptor_->has_three_body == false) continue;
 
+        for (int kk = jj+1; kk < numNei; ++kk) {
+
+          // adjust index of particle neighbor
+          int const k = n1Atom[kk] + baseConvert;
+          int const klayer = in_layer_[k];
+          if (klayer != ilayer) continue;  // should be in the same layers
+
+          int const kkk = std::distance(lr.begin(), std::find(lr.begin(), lr.end(), k));
+          int const kSpecies = particleSpecies[k];
+
+          // cutoff between ik and jk
+          double const rcutij = sqrt(cutoffsSq2D_samelayer_[iSpecies][jSpecies]);
+          double const rcutik = sqrt(cutoffsSq2D_samelayer_[iSpecies][kSpecies]);
+          double const rcutjk = sqrt(cutoffsSq2D_samelayer_[jSpecies][kSpecies]);
+
+          // Compute rik, rjk and their squares
+          double rik[DIM];
+          double rjk[DIM];
+          for (int dim = 0; dim < DIM; ++dim) {
+            rik[dim] = coordinates[k][dim] - coordinates[i][dim];
+            rjk[dim] = coordinates[k][dim] - coordinates[j][dim];
+          }
+          double const rikmag = sqrt(rik[0]*rik[0] + rik[1]*rik[1] + rik[2]*rik[2]);
+          double const rjkmag = sqrt(rjk[0]*rjk[0] + rjk[1]*rjk[1] + rjk[2]*rjk[2]);
+
+          double const rvec[3] = {rijmag, rikmag, rjkmag};
+          double const rcutvec[3] = {rcutij, rcutik, rcutjk};
+
+          if (rikmag > rcutik) continue; // three-dody not interacting
+
+          for (size_t p=0; p<descriptor_->name.size(); p++) {
+
+            if (descriptor_->name[p] != "g4" &&
+                descriptor_->name[p] != "g5") {
+              continue;
+            }
+            int idx = descriptor_->starting_index[p];
+
+            for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
+
+              double gc;
+              double dgcdr_three[3];
+              if (descriptor_->name[p] == "g4") {
+                double zeta = descriptor_->params[p][q][0];
+                double lambda = descriptor_->params[p][q][1];
+                double eta = descriptor_->params[p][q][2];
                 if (need_forces) {
-                  for (int kdim = 0; kdim < DIM; ++kdim) {
-                    double pair_ij = dgcdr_three[0]*rij[kdim]/rijmag;
-                    double pair_ik = dgcdr_three[1]*rik[kdim]/rikmag;
-                    double pair_jk = dgcdr_three[2]*rjk[kdim]/rjkmag;
-                    dGCdr[ii][idx][iii*DIM+kdim] += pair_ij + pair_ik;
-                    dGCdr[ii][idx][jjj*DIM+kdim] += -pair_ij + pair_jk;
-                    dGCdr[ii][idx][kkk*DIM+kdim] += -pair_ik - pair_jk;
-                  }
+                  descriptor_->sym_d_g4(zeta, lambda, eta, rvec, rcutvec, gc, dgcdr_three);
+                } else {
+                  descriptor_->sym_g4(zeta, lambda, eta, rvec, rcutvec, gc);
                 }
-                idx += 1;
+              }
+              else if (descriptor_->name[p] == "g5") {
+                double zeta = descriptor_->params[p][q][0];
+                double lambda = descriptor_->params[p][q][1];
+                double eta = descriptor_->params[p][q][2];
+                if (need_forces) {
+                  descriptor_->sym_d_g5(zeta, lambda, eta, rvec, rcutvec, gc, dgcdr_three);
+                } else {
+                  descriptor_->sym_g5(zeta, lambda, eta, rvec, rcutvec, gc);
+                }
+              }
 
-              } // loop over same descriptor but different parameter set
-            }  // loop over descriptors
-          }  // loop over kk (three body neighbors)
-        }  // end of first neighbor loop
-      }  // end of loop over contributing particles
+              GC[ii][idx] += gc;
+
+              if (need_forces) {
+                for (int kdim = 0; kdim < DIM; ++kdim) {
+                  double pair_ij = dgcdr_three[0]*rij[kdim]/rijmag;
+                  double pair_ik = dgcdr_three[1]*rik[kdim]/rikmag;
+                  double pair_jk = dgcdr_three[2]*rjk[kdim]/rjkmag;
+                  dGCdr[ii][idx][iii*DIM+kdim] += pair_ij + pair_ik;
+                  dGCdr[ii][idx][jjj*DIM+kdim] += -pair_ij + pair_jk;
+                  dGCdr[ii][idx][kkk*DIM+kdim] += -pair_ik - pair_jk;
+                }
+              }
+              idx += 1;
+
+            } // loop over same descriptor but different parameter set
+          }  // loop over descriptors
+        }  // loop over kk (three body neighbors)
+      }  // end of first neighbor loop
+    }  // end of loop over contributing particles
 
 
 /*
-      //TODO delete debug (print generalized coords not_normalized)
-      std::cout<<"# Debug descriptor values before normalization" << std::endl;
-      std::cout<<"# atom id    descriptor values ..." << std::endl;
-      for(int i=0; i<Ncontrib; i++) {
-        std::cout<< lr_con_1and2[i] <<"    ";
+    //TODO delete debug (print generalized coords not_normalized)
+    std::cout<<"# Debug descriptor values before normalization" << std::endl;
+    std::cout<<"# atom id    descriptor values ..." << std::endl;
+    for(int i=0; i<Ncontrib; i++) {
+    std::cout<< lr_con[i] <<"    ";
+    for(int j=0; j<Ndescriptors; j++) {
+    printf("%.15f ",GC[i][j]);
+    }
+    std::cout<<std::endl;
+    }
+*/
+
+    /*
+    std::cout<<"# Debug dGCdr before normalization" << std::endl;
+    std::cout<<"# atom id  desc id  dGCdr descriptor values ..." << std::endl;
+    for(int i=0; i<Ncontrib; i++) {
+    for(int j=0; j<Ndescriptors; j++) {
+    std::cout<< lr_con[i] <<"    " <<j<<"    " ;
+    for(int k=0; k<DIM*Nparticles; k++) {
+    printf("%.15f ",dGCdr[i][j][k]);
+    }
+    std::cout<<std::endl;
+    }
+    }
+    */
+
+
+    // centering and normalization
+    if (descriptor_->center_and_normalize) {
+      for (int i=0; i<Ncontrib; i++) {
+        for (int j=0; j<Ndescriptors; j++) {
+
+          GC[i][j] = (GC[i][j] - descriptor_->features_mean[j]) / descriptor_->features_std[j];
+
+          if (need_forces) {
+            for (int k=0; k<DIM*Nparticles; k++) {
+              dGCdr[i][j][k] /= descriptor_->features_std[j];
+            }
+          }
+
+        }
+      }
+    }
+
+
+/*
+    //TODO delete debug (print generalized coords normalized)
+      std::cout<<"\n\n# Debug descriptor values after normalization" << std::endl;
+        std::cout<<"# atom id    descriptor values ..." << std::endl;
+        for(int i=0; i<Ncontrib; i++)
+        {
+        std::cout<< lr_con[i] <<"    ";
         for(int j=0; j<Ndescriptors; j++) {
-          printf("%.15f ",GC[i][j]);
+        printf("%.15f ",GC[i][j]);
         }
         std::cout<<std::endl;
-      }
-      std::cout<<"# Debug dGCdr before normalization" << std::endl;
-      std::cout<<"# atom id  desc id  dGCdr descriptor values ..." << std::endl;
-      for(int i=0; i<Ncontrib; i++) {
-        for(int j=0; j<Ndescriptors; j++) {
-          std::cout<< lr_con_1and2[i] <<"    " <<j<<"    " ;
-          for(int k=0; k<DIM*Nparticles; k++) {
-            printf("%.15f ",dGCdr[i][j][k]);
-          }
-          std::cout<<std::endl;
         }
-      }
 */
 
 
-      // centering and normalization
-      if (descriptor_->center_and_normalize) {
+    double E_avg;
+    double* Epart_avg;
+    double** dEdGC_avg;
+    E_avg = 0;
+    AllocateAndInitialize1DArray(Epart_avg, Ncontrib);
+    AllocateAndInitialize2DArray(dEdGC_avg, Ncontrib, Ndescriptors);
+
+    // do multiple runs to get the average
+    int NUM_EVALS = 50;
+    for(int iev=0; iev<NUM_EVALS; iev++) {
+
+      // NN feedforward
+      network_->forward(GC[0], Ncontrib, Ndescriptors);
+
+      if (isComputeEnergy == true) {
+        E_avg += network_->get_sum_output() / NUM_EVALS;
+      }
+
+      if (isComputeParticleEnergy == true) {
+        double* Epart;
+        Epart = network_->get_output();
+        for (int i=0; i<Ncontrib; i++) {
+          Epart_avg[i] += Epart[i] / NUM_EVALS;
+        }
+      }
+
+      if (need_forces) {
+        // NN backpropagation to compute derivative of energy w.r.t generalized coords
+        network_->backward();
+        double* dEdGC;
+        dEdGC = network_->get_grad_input();
         for (int i=0; i<Ncontrib; i++) {
           for (int j=0; j<Ndescriptors; j++) {
+            dEdGC_avg[i][j] += dEdGC[i*Ndescriptors + j] / NUM_EVALS;
+          }
+        }
+      }
 
-            GC[i][j] = (GC[i][j] - descriptor_->features_mean[j]) / descriptor_->features_std[j];
+    }
 
-            if (need_forces) {
-              for (int k=0; k<DIM*Nparticles; k++) {
-                dGCdr[i][j][k] /= descriptor_->features_std[j];
-              }
+    // Contribution to energy
+    if (isComputeEnergy == true) {
+      *energy += E_avg;
+    }
+
+    // Contribution to particle energy
+    if (isComputeParticleEnergy == true) {
+      for (int i=0; i<Ncontrib; i++) {
+        particleEnergy[lr_con[i]] += Epart_avg[i];
+      }
+    }
+
+    // Compute derivative of energy w.r.t coords
+    if (need_forces) {
+      for (int i=0; i<Ncontrib; i++)
+        for (int j=0; j<Ndescriptors; j++)
+          for (int k=0; k<Nparticles; k++)
+            for (int kdim=0; kdim<DIM; kdim++) {
+              forces[lr[k]][kdim] += dEdGC_avg[i][j] * dGCdr[i][j][k*DIM + kdim];
             }
-
-          }
-        }
-      }
+    }
 
 
-      //TODO delete debug (print generalized coords not_normalized)
-      /*  std::cout<<"\n\n# Debug descriptor values after normalization" << std::endl;
-          std::cout<<"# atom id    descriptor values ..." << std::endl;
-          for(int i=0; i<Ncontrib; i++)
-          {
-          std::cout<< i <<"    ";
-          for(int j=0; j<Ndescriptors; j++) {
-          printf("%.15f ",GC[i][j]);
-          }
-          std::cout<<std::endl;
-          }
-       */
+    // dealloate local array
+    Deallocate2DArray(GC);
+    Deallocate3DArray(dGCdr);
+    Deallocate1DArray(Epart_avg);
+    Deallocate2DArray(dEdGC_avg);
 
-
-      double E_avg;
-      double* Epart_avg;
-      double** dEdGC_avg;
-      E_avg = 0;
-      AllocateAndInitialize1DArray(Epart_avg, Ncontrib);
-      AllocateAndInitialize2DArray(dEdGC_avg, Ncontrib, Ndescriptors);
-
-      // do multiple runs to get the average
-      int NUM_EVALS = 50;
-      for(int iev=0; iev<NUM_EVALS; iev++) {
-
-        // NN feedforward
-        network_->forward(GC[0], Ncontrib, Ndescriptors);
-
-        if (isComputeEnergy == true) {
-          E_avg += network_->get_sum_output() / NUM_EVALS;
-        }
-
-        if (isComputeParticleEnergy == true) {
-          double* Epart;
-          Epart = network_->get_output();
-          for (int i=0; i<Ncontrib; i++) {
-            Epart_avg[i] += Epart[i] / NUM_EVALS;
-          }
-        }
-
-        if (need_forces) {
-
-          // NN backpropagation to compute derivative of energy w.r.t generalized coords
-          network_->backward();
-          double* dEdGC;
-          dEdGC = network_->get_grad_input();
-          for (int i=0; i<Ncontrib; i++) {
-            for (int j=0; j<Ndescriptors; j++) {
-              dEdGC_avg[i][j] += dEdGC[i*Ndescriptors + j] / NUM_EVALS;
-            }
-          }
-
-        }
-
-      }
-
-
-      // Contribution to energy
-      if (isComputeEnergy == true) {
-        *energy += E_avg;
-      }
-
-      // Contribution to particle energy
-      if (isComputeParticleEnergy == true) {
-        for (int i=0; i<Ncontrib; i++) {
-          particleEnergy[lr_con_1and2[i]] += Epart_avg[i];
-        }
-      }
-
-      // Compute derivative of energy w.r.t coords
-      if (need_forces) {
-        for (int i=0; i<Ncontrib; i++)
-          for (int j=0; j<Ndescriptors; j++)
-            for (int k=0; k<Nparticles; k++)
-              for (int kdim=0; kdim<DIM; kdim++) {
-                forces[lr_1and2[k]][kdim] += dEdGC_avg[i][j] * dGCdr[i][j][k*DIM + kdim];
-              }
-      }
-
-
-      // dealloate local array
-      Deallocate2DArray(GC);
-      Deallocate3DArray(dGCdr);
-      Deallocate1DArray(Epart_avg);
-      Deallocate2DArray(dEdGC_avg);
-
-    } // loop over j_lr
   }  // loop over i_lr
 
 

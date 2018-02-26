@@ -122,7 +122,7 @@ void NeuralNetwork::backward()
         .cwiseProduct(activFuncDeriv_(preactiv_[i]));
 
     // apply dropout
-    if (static_cast<int>(keep_prob_[i]) != 1) {
+    if (static_cast<int>(keep_prob_[i+1]) != 1) {
       delta = delta.cwiseProduct(keep_prob_binary_[i+1]) / keep_prob_[i+1];  // no aliasing will occur
     }
   }

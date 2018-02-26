@@ -32,7 +32,7 @@
 include ../Makefile.KIM_Config
 
 # set model driver specific details
-MODEL_DRIVER_NAME := Artificial_Neural_Network__MD_000000111111_000
+MODEL_DRIVER_NAME := Artificial_Neural_Network_Intralayer__MD_000000111111_000
 MODEL_DRIVER_KIM_FILE_TEMPLATE := ANN.kim.tpl
 MODEL_DRIVER_INIT_FUNCTION_NAME := model_driver_init
 

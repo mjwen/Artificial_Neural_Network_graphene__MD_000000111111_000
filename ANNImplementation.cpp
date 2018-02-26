@@ -39,7 +39,7 @@
 #include "descriptor.h"
 #include "helper.h"
 
-#define MAXLINE 1024
+#define MAXLINE 4096
 #define IGNORE_RESULT(fn) if(fn){}
 
 
@@ -1114,6 +1114,7 @@ int ANNImplementation::GetComputeIndex(
 }
 
 
+
 //******************************************************************************
 // assign atoms into layers
 // To assign atoms into different layers. If `ruct_layer < 0', it will be
@@ -1122,6 +1123,22 @@ int ANNImplementation::GetComputeIndex(
 // since it runs through the neighborlist once.
 //
 //******************************************************************************
+
+// TODO delete, for debug purpose
+void write_XYZ(int natoms, const VectorOfSizeDIM* const coords) {
+
+  std::ofstream fp;
+  fp.open("atom_pos.xyz");
+  fp << natoms <<std::endl;
+  fp << "Lattice=\"1 0 0 0 1 0 0 0 1\" PBC=\"1 1 1\" Properties=\"species:S:1:pos:R:3\" Energy=0"<<std::endl;
+  for (int i=0; i<natoms; i++) {
+    fp <<"C " << coords[i][0] << " "<< coords[i][1] << " "<< coords[i][2] << std::endl;
+  }
+
+  fp.close();
+}
+
+
 int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
     GetNeighborFunction* const get_neigh,
     const int* const particleSpecies,
@@ -1174,13 +1191,19 @@ int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
 
   // cutoff used to find atoms in the same layer
   double cutsq_layer;
+
+ /*
   if (rcut_layer > 0) {
     cutsq_layer = rcut_layer * rcut_layer;
   }
   else {   // max of min of pair distance is rcut_layer
 
-    std::vector<double> min_rsq(Npart, 1e10);
 
+    //NOTE, this algorithm does not work properly. For example, there are two group
+    // of atoms in the same layer, but separated by a larger distance, then they
+    // will be identified as two group of atoms.
+
+    std::vector<double> min_rsq(Npart, 1e10);
 
     for (int i=0; i<Npart; i++) {
       // get neighbors of atom i
@@ -1190,8 +1213,9 @@ int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
       int* ilist = 0;
       double* pRij = 0;
       int const baseConvert = baseconvert_;
+      int request = i - baseConvert;
       get_neigh( reinterpret_cast<void**>(const_cast<KIM_API_model**>(&pkim)),
-          &one, &i, &dummy, &numnei, &ilist, &pRij);
+          &one, &request, &dummy, &numnei, &ilist, &pRij);
 
       // Setup loop over neighbors of current particle
       for (int jj = 0; jj < numnei; ++jj)
@@ -1218,8 +1242,10 @@ int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
     double max_min_rsq = *(std::max_element(min_rsq.begin(), min_rsq.end()));
     cutsq_layer = max_min_rsq * 1.01;  // *1.01 to get over edge case
   }
+*/
+
   // we can set it manually to speed up
-  // cutsq_layer = (0.72*3.35)*(0.72*3.35);
+  cutsq_layer = (2.46*1.1)*(2.46*1.1);
 
 
   // layers
@@ -1260,8 +1286,9 @@ int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
       int* ilist = 0;
       double* pRij = 0;
       int const baseConvert = baseconvert_;
+      int request = i - baseConvert;
       get_neigh( reinterpret_cast<void**>(const_cast<KIM_API_model**>(&pkim)),
-          &one, &i, &dummy, &numnei, &ilist, &pRij);
+          &one, &request, &dummy, &numnei, &ilist, &pRij);
 
 
       // Setup loop over neighbors of current particle
@@ -1324,9 +1351,10 @@ int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
 
 
   //TODO right now only for bilayer
-  if (nlayers_ !=2) {
-    std::cerr<<"Error: KIM ANN Model, "<<nlayers_<<" detected. Should be 2."<<std::endl;
-  }
+//  if (nlayers_ !=2) {
+    std::cerr<<"Error: KIM ANN Model, "<<nlayers_<<" layers detected. Should be 2."<<std::endl;
+    write_XYZ(Npart, coordinates);
+//  }
 
 
 /*
