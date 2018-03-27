@@ -91,7 +91,7 @@ void NeuralNetwork::forward(double * zeta, const int rows, const int cols)
   for (int i=0; i<Nlayers_; i++) {
 
     // apply dropout
-    if (static_cast<int>(keep_prob_[i]) != 1) {
+    if (keep_prob_[i] < 1-1e-10) {
       act = dropout_(act, i);  // no aliasing will occur for act
     }
 
@@ -122,13 +122,13 @@ void NeuralNetwork::backward()
         .cwiseProduct(activFuncDeriv_(preactiv_[i]));
 
     // apply dropout
-    if (static_cast<int>(keep_prob_[i+1]) != 1) {
+    if (keep_prob_[i+1] < 1-1e-10) {
       delta = delta.cwiseProduct(keep_prob_binary_[i+1]) / keep_prob_[i+1];  // no aliasing will occur
     }
   }
 
   // derivative of cost (energy E) w.r.t to input (generalized coords)
-  if (static_cast<int>(keep_prob_[0]) != 1) {
+  if (keep_prob_[0] < 1-1e-10) {
     gradInput_ = (delta * weights_[0].transpose()).cwiseProduct(keep_prob_binary_[0])/keep_prob_[0];
   }
   else {
@@ -145,13 +145,13 @@ RowMatrixXd NeuralNetwork::dropout_(RowMatrixXd const& x, int layer)
   RowMatrixXd y;
   double keep_prob = keep_prob_[layer];
 
-  if (static_cast<int>(keep_prob) != 1) {
+  if (keep_prob < 1-1e-10) {
     // uniform [-1, 1]
-    RowMatrixXd random = RowMatrixXd::Random(x.rows(), x.cols());
-    // uniform [keep_prob, 1+keep_prob]
-    random = (random/2.).array() + (0.5 + keep_prob);
+    RowMatrixXd random = RowMatrixXd::Random(1, x.cols());
+    // uniform [keep_prob, 1+keep_prob] .floor()
+    random =( (random/2.).array() + 0.5 + keep_prob ).floor();
 
-    keep_prob_binary_[layer] = random.array().floor();
+    keep_prob_binary_[layer] = random.replicate(x.rows(), 1);   // each row is the same (each atom is treated the same)
 
     //TODO delete  This is for debug pourpose, should be used together with `openkim-fit/tests/test_ann_force_dropout.py`
     bool debug = false;
@@ -161,8 +161,8 @@ RowMatrixXd NeuralNetwork::dropout_(RowMatrixXd const& x, int layer)
       keep_prob_binary_[layer](0,5) = 0.;
       keep_prob_binary_[layer](1,2) = 0.;
       keep_prob_binary_[layer](1,7) = 0.;
-      keep_prob_binary_[layer](3,2) = 0.;
-      keep_prob_binary_[layer](3,5) = 0.;
+      keep_prob_binary_[layer](2,2) = 0.;
+      keep_prob_binary_[layer](2,5) = 0.;
     }
 
     y = (x/keep_prob).cwiseProduct(keep_prob_binary_[layer]);

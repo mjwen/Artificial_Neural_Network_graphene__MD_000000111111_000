@@ -39,7 +39,7 @@
 #include "descriptor.h"
 #include "helper.h"
 
-#define MAXLINE 4096
+#define MAXLINE 2048
 #define IGNORE_RESULT(fn) if(fn){}
 
 
@@ -1114,7 +1114,6 @@ int ANNImplementation::GetComputeIndex(
 }
 
 
-
 //******************************************************************************
 // assign atoms into layers
 // To assign atoms into different layers. If `ruct_layer < 0', it will be
@@ -1192,7 +1191,7 @@ int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
   // cutoff used to find atoms in the same layer
   double cutsq_layer;
 
- /*
+/*
   if (rcut_layer > 0) {
     cutsq_layer = rcut_layer * rcut_layer;
   }
@@ -1245,7 +1244,8 @@ int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
 */
 
   // we can set it manually to speed up
-  cutsq_layer = (2.46*1.1)*(2.46*1.1);
+  //cutsq_layer = (2.46*1.1)*(2.46*1.1);
+  cutsq_layer = (2.46*1.3)*(2.46*1.3);
 
 
   // layers
@@ -1353,7 +1353,7 @@ int ANNImplementation::CreateLayers(KIM_API_model* const pkim,
   //TODO right now only for bilayer
 //  if (nlayers_ !=2) {
     std::cerr<<"Error: KIM ANN Model, "<<nlayers_<<" layers detected. Should be 2."<<std::endl;
-    write_XYZ(Npart, coordinates);
+//    write_XYZ(Npart, coordinates);
 //  }
 
 

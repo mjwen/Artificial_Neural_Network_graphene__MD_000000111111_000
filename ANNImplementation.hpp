@@ -30,6 +30,7 @@
 #ifndef ANN_IMPLEMENTATION_HPP_
 #define ANN_IMPLEMENTATION_HPP_
 
+#include <iomanip>
 #include "KIM_API_status.h"
 #include "ANN.hpp"
 #include "descriptor.h"
@@ -628,28 +629,43 @@ int ANNImplementation::Compute(
     double E_avg;
     double* Epart_avg;
     double** dEdGC_avg;
+    std::vector<double> E_all;
+
     E_avg = 0;
     AllocateAndInitialize1DArray(Epart_avg, Ncontrib);
     AllocateAndInitialize2DArray(dEdGC_avg, Ncontrib, Ndescriptors);
 
     // do multiple runs to get the average
-    int NUM_EVALS = 50;
+    int NUM_EVALS = 200;
+    double** Epart_all;   // compute the standard deviation of atom energy
+    AllocateAndInitialize2DArray(Epart_all, NUM_EVALS, Ncontrib);
+
     for(int iev=0; iev<NUM_EVALS; iev++) {
 
       // NN feedforward
       network_->forward(GC[0], Ncontrib, Ndescriptors);
 
       if (isComputeEnergy == true) {
-        E_avg += network_->get_sum_output() / NUM_EVALS;
+        double eng = network_->get_sum_output();
+        E_avg += eng / NUM_EVALS;
+        E_all.push_back(eng);
       }
 
-      if (isComputeParticleEnergy == true) {
+/*      if (isComputeParticleEnergy == true) {
         double* Epart;
         Epart = network_->get_output();
         for (int i=0; i<Ncontrib; i++) {
           Epart_avg[i] += Epart[i] / NUM_EVALS;
         }
       }
+*/
+        // all partilce energy
+        double* Epart;
+        Epart = network_->get_output();
+        for (int i=0; i<Ncontrib; i++) {
+          Epart_all[iev][i] = Epart[i];
+        }
+
 
       if (need_forces) {
         // NN backpropagation to compute derivative of energy w.r.t generalized coords
@@ -664,6 +680,27 @@ int ANNImplementation::Compute(
       }
 
     }
+
+
+    // compute mean and stdev of energy
+    double mean;
+    double stdev;
+    ComputeMeanAndStdev(E_all, mean, stdev);
+
+    std::ofstream fp;
+    fp.open("energy_mean_stdev.txt", std::ios_base::app);   // append mode
+    fp << std::setprecision(16) << mean<< "    " <<stdev <<std::endl;
+
+    // write std per atom
+/*    std::ofstream fp2;
+    fp2.open("energy_atom.txt", std::ios_base::app);   // append mode
+    for(int iev=0; iev<NUM_EVALS; iev++) {
+        for (int i=0; i<Ncontrib; i++) {
+          fp2 << std::setprecision(16) <<Epart_all[iev][i]<< "  ";
+        }
+          fp2 << std::endl;
+    }
+*/
 
     // Contribution to energy
     if (isComputeEnergy == true) {
@@ -692,6 +729,7 @@ int ANNImplementation::Compute(
     Deallocate2DArray(GC);
     Deallocate3DArray(dGCdr);
     Deallocate1DArray(Epart_avg);
+    Deallocate2DArray(Epart_all);
     Deallocate2DArray(dEdGC_avg);
 
   }  // loop over i_lr

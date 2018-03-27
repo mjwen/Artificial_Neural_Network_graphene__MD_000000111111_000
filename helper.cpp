@@ -4,6 +4,10 @@
 //
 //==============================================================================
 #include <iostream>
+#include <numeric>
+#include <cmath>
+#include <algorithm>
+#include <iterator>
 #include "helper.h"
 
 // allocate memory and set pointers
@@ -91,6 +95,22 @@ void Deallocate1DArray(double*& arrayPtr) {
 	if (arrayPtr != 0) delete [] arrayPtr;
 	// nullify pointer
 	arrayPtr = 0;
+}
+
+// compute the mean and standard deviation of vector
+void ComputeMeanAndStdev(std::vector<double> const & v, double& mean, double& stdev)
+{
+  double sum = std::accumulate(std::begin(v), std::end(v), 0.0);
+  mean =  sum / v.size();
+
+  double accum = 0.0;
+  std::for_each (std::begin(v), std::end(v), [&](const double d) {
+    accum += (d - mean) * (d - mean);
+  });
+
+  //stdev = std::sqrt(accum / (v.size()-1));    // corrected version
+  stdev = std::sqrt(accum / (v.size()));    // uncorrected
+
 }
 
 
