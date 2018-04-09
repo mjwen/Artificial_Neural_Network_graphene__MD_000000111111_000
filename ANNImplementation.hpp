@@ -345,14 +345,6 @@ int ANNImplementation::Compute(
 
 
 
-  // setting up generalzied coords matrix and the its derivative w.r.t. atomic coords
-  double** GC;
-  double*** dGCdr;
-  const int Ndescriptors = descriptor_->get_num_descriptors();
-  AllocateAndInitialize2DArray(GC, Ncontrib, Ndescriptors);
-  AllocateAndInitialize3DArray(dGCdr, Ncontrib, Ndescriptors, DIM*Nparticles);
-
-
   // calculate generalized coordiantes
   //
   // Setup loop over contributing particles
@@ -374,6 +366,16 @@ int ANNImplementation::Compute(
 
     int const numNei = numnei;
     int const * const n1Atom = n1atom;
+
+
+
+    // setting up generalzied coords matrix and the its derivative w.r.t. atomic coords
+    double* GC;
+    double** dGCdr;
+    const int Ndescriptors = descriptor_->get_num_descriptors();
+    AllocateAndInitialize1DArray(GC, Ndescriptors);
+    AllocateAndInitialize2DArray(dGCdr, Ndescriptors, DIM*(numNei+1));  // last slot for atom i
+
 
     // Setup loop over neighbors of current particle
     for (int jj = 0; jj < numNei; ++jj)
@@ -436,12 +438,12 @@ int ANNImplementation::Compute(
             }
           }
 
-          GC[ii][idx] += gc;
+          GC[idx] += gc;
           if (need_forces) {
             for (int kdim = 0; kdim < DIM; ++kdim) {
               double pair = dgcdr_two*rij[kdim]/rijmag;
-              dGCdr[ii][idx][i*DIM+kdim] += pair;
-              dGCdr[ii][idx][j*DIM+kdim] -= pair;
+              dGCdr[idx][numNei*DIM+kdim] += pair;   // for i atom
+              dGCdr[idx][jj*DIM+kdim] -= pair;   // for neighboring atoms of i
             }
           }
           idx += 1;
@@ -511,16 +513,16 @@ int ANNImplementation::Compute(
               }
             }
 
-            GC[ii][idx] += gc;
+            GC[idx] += gc;
 
             if (need_forces) {
               for (int kdim = 0; kdim < DIM; ++kdim) {
                 double pair_ij = dgcdr_three[0]*rij[kdim]/rijmag;
                 double pair_ik = dgcdr_three[1]*rik[kdim]/rikmag;
                 double pair_jk = dgcdr_three[2]*rjk[kdim]/rjkmag;
-                dGCdr[ii][idx][i*DIM+kdim] += pair_ij + pair_ik;
-                dGCdr[ii][idx][j*DIM+kdim] += -pair_ij + pair_jk;
-                dGCdr[ii][idx][k*DIM+kdim] += -pair_ik - pair_jk;
+                dGCdr[idx][numNei*DIM+kdim] += pair_ij + pair_ik;    // for i atom
+                dGCdr[idx][jj*DIM+kdim] += -pair_ij + pair_jk;    // for neighboring atoms of i
+                dGCdr[idx][kk*DIM+kdim] += -pair_ik - pair_jk;    // for neighboring atoms of i
               }
             }
             idx += 1;
@@ -529,143 +531,99 @@ int ANNImplementation::Compute(
         }  // loop over descriptors
       }  // loop over kk (three body neighbors)
     }  // end of first neighbor loop
-  }  // end of loop over contributing particles
 
 
-/*
-  //TODO delete debug (print generalized coords not_normalized)
-  std::cout<<"# Debug descriptor values before normalization" << std::endl;
-  std::cout<<"# atom id    descriptor values ..." << std::endl;
-  for(int i=0; i<Ncontrib; i++) {
-  std::cout<< lr_con[i] <<"    ";
-  for(int j=0; j<Ndescriptors; j++) {
-  printf("%.15f ",GC[i][j]);
-  }
-  std::cout<<std::endl;
-  }
-*/
 
-  /*
-  std::cout<<"# Debug dGCdr before normalization" << std::endl;
-  std::cout<<"# atom id  desc id  dGCdr descriptor values ..." << std::endl;
-  for(int i=0; i<Ncontrib; i++) {
-  for(int j=0; j<Ndescriptors; j++) {
-  std::cout<< lr_con[i] <<"    " <<j<<"    " ;
-  for(int k=0; k<DIM*Nparticles; k++) {
-  printf("%.15f ",dGCdr[i][j][k]);
-  }
-  std::cout<<std::endl;
-  }
-  }
-  */
-
-
-  // centering and normalization
-  if (descriptor_->center_and_normalize) {
-    for (int i=0; i<Ncontrib; i++) {
+    // centering and normalization
+    if (descriptor_->center_and_normalize) {
       for (int j=0; j<Ndescriptors; j++) {
-
-        GC[i][j] = (GC[i][j] - descriptor_->features_mean[j]) / descriptor_->features_std[j];
-
+        GC[j] = (GC[j] - descriptor_->features_mean[j]) / descriptor_->features_std[j];
         if (need_forces) {
-          for (int k=0; k<DIM*Nparticles; k++) {
-            dGCdr[i][j][k] /= descriptor_->features_std[j];
+          for (int k=0; k<numNei+1; k++) {
+            for (int kdim=0; kdim<DIM; kdim++) {
+              dGCdr[j][k*DIM+kdim] /= descriptor_->features_std[j];
+            }
           }
         }
-
       }
     }
-  }
 
-
-/*
-  //TODO delete debug (print generalized coords normalized)
-    std::cout<<"\n\n# Debug descriptor values after normalization" << std::endl;
-      std::cout<<"# atom id    descriptor values ..." << std::endl;
-      for(int i=0; i<Ncontrib; i++)
-      {
-      std::cout<< lr_con[i] <<"    ";
-      for(int j=0; j<Ndescriptors; j++) {
-      printf("%.15f ",GC[i][j]);
-      }
-      std::cout<<std::endl;
-      }
-*/
-
-
-  double E_avg;
-  double* Epart_avg;
-  double** dEdGC_avg;
-
-  E_avg = 0;
-  AllocateAndInitialize1DArray(Epart_avg, Ncontrib);
-  AllocateAndInitialize2DArray(dEdGC_avg, Ncontrib, Ndescriptors);
-
-  // do multiple runs to get the average
-  int NUM_EVALS = 1;
-
-  for(int iev=0; iev<NUM_EVALS; iev++) {
 
     // NN feedforward
-    network_->forward(GC[0], Ncontrib, Ndescriptors);
+    double NUM_EVALS = 1;
+    double E_avg = 0.;
+    double* dEdGC_avg;
+    AllocateAndInitialize1DArray(dEdGC_avg, Ndescriptors);
+
+
+    network_->forward(GC, 1, Ndescriptors);
 
     if (isComputeEnergy == true) {
       double eng = network_->get_sum_output();
       E_avg += eng / NUM_EVALS;
     }
 
-    if (isComputeParticleEnergy == true) {
-      double* Epart;
-      Epart = network_->get_output();
-      for (int i=0; i<Ncontrib; i++) {
-        Epart_avg[i] += Epart[i] / NUM_EVALS;
-      }
-    }
+    //double* Epart_avg;
+    // computing atom by atom, so Epart_avg is the same as E_avg
+    /*
+       if (isComputeParticleEnergy == true) {
+       double* Epart;
+       Epart = network_->get_output();
+       for (int i=0; i<Ncontrib; i++) {
+       Epart_avg[i] += Epart[i] / NUM_EVALS;
+       }
+       }
+     */
 
     if (need_forces) {
       // NN backpropagation to compute derivative of energy w.r.t generalized coords
       network_->backward();
       double* dEdGC;
       dEdGC = network_->get_grad_input();
-      for (int i=0; i<Ncontrib; i++) {
-        for (int j=0; j<Ndescriptors; j++) {
-          dEdGC_avg[i][j] += dEdGC[i*Ndescriptors + j] / NUM_EVALS;
+      for (int j=0; j<Ndescriptors; j++) {
+        dEdGC_avg[j] += dEdGC[j] / NUM_EVALS;
+      }
+
+    }
+
+
+
+
+    // Contribution to energy
+    if (isComputeEnergy == true) {
+      *energy += E_avg;
+    }
+
+    // Contribution to particle energy
+    if (isComputeParticleEnergy == true) {
+      particleEnergy[i] += E_avg;
+    }
+
+    // Contribution to forces
+    if (need_forces) {
+      for (int j=0; j<Ndescriptors; j++) {
+
+        // i atom
+        for (int kdim=0; kdim<DIM; kdim++) {
+          forces[i][kdim] += dEdGC_avg[j] * dGCdr[j][numNei*DIM + kdim];
         }
+
+        // neighboring atoms of i
+        for (int kk = 0; kk < numNei; ++kk) {
+          int const k = n1Atom[kk] + baseConvert;  // adjust index of particle neighbor
+          for (int kdim=0; kdim<DIM; kdim++) {
+            forces[k][kdim] += dEdGC_avg[j] * dGCdr[j][kk*DIM + kdim];
+          }
+        }
+
       }
     }
 
-  }
+    Deallocate1DArray(GC);
+    Deallocate2DArray(dGCdr);
+    Deallocate1DArray(dEdGC_avg);
 
-
-  // Contribution to energy
-  if (isComputeEnergy == true) {
-    *energy += E_avg;
-  }
-
-  // Contribution to particle energy
-  if (isComputeParticleEnergy == true) {
-    for (int i=0; i<Ncontrib; i++) {
-      particleEnergy[i] += Epart_avg[i];
-    }
-  }
-
-  // Compute derivative of energy w.r.t coords
-  if (need_forces) {
-    for (int i=0; i<Ncontrib; i++)
-      for (int j=0; j<Ndescriptors; j++)
-        for (int k=0; k<Nparticles; k++)
-          for (int kdim=0; kdim<DIM; kdim++) {
-            forces[k][kdim] += dEdGC_avg[i][j] * dGCdr[i][j][k*DIM + kdim];
-          }
-  }
-
-
-  // dealloate local array
-  Deallocate2DArray(GC);
-  Deallocate3DArray(dGCdr);
-  Deallocate1DArray(Epart_avg);
-  Deallocate2DArray(dEdGC_avg);
-
+  }  // end of loop over contributing particles
 
 
   // everything is good
