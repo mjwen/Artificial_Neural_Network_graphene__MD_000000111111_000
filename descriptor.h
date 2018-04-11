@@ -2,7 +2,6 @@
 #define DESCRIPTOR_H_
 
 #include <cmath>
-#include <string>
 #include <cstring>
 #include <vector>
 #include <iostream>
@@ -20,7 +19,7 @@ class Descriptor
 {
   public:
 
-		std::vector<std::string> name;    // name of each descriptor
+		std::vector<char*> name;    // name of each descriptor
 		std::vector<int> starting_index;  // starting index of each descriptor
                                       // in generalized coords
 		std::vector<double**> params;     // params of each descriptor
@@ -129,6 +128,52 @@ inline double d_cut_exp(double r, double rcut) {
 	else
 		return 0.0;
 }
+
+
+
+inline double pow2(double x) {
+  return x*x;
+}
+
+inline double pow4(double x) {
+  double x2 = x*x;
+  return x2*x2;
+}
+
+inline double pow8(double x) {
+  double x2 = x*x;
+  double x4 = x2*x2;
+  return x4*x4;
+}
+
+inline double pow16(double x) {
+  double x2 = x*x;
+  double x4 = x2*x2;
+  double x8 = x4*x4;
+  return x8*x8;
+}
+
+
+inline double fast_pow(double base, int n) {
+
+  double power = 0.0;
+  switch(n) {
+    case 1: power = base;
+            break;
+    case 2: power = pow2(base);
+            break;
+    case 4: power = pow4(base);
+            break;
+    case 8: power = pow8(base);
+            break;
+    case 16: power = pow16(base);
+            break;
+    default: std::cerr <<"KIM potential, not supported fast_pow n = "<<n<<std::endl;
+  }
+
+  return power;
+}
+
 
 
 

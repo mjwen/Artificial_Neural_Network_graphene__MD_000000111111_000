@@ -10,6 +10,7 @@ Descriptor::Descriptor(){
 Descriptor::~Descriptor() {
 	for (size_t i=0; i<params.size(); i++) {
 		Deallocate2DArray(params.at(i));
+    delete [] name.at(i);
 	}
 }
 
@@ -35,12 +36,18 @@ void Descriptor::add_descriptor(char* name, double** values, int row, int col)
 		}
 	}
 
+  int SIZE = 8;
+  char* nm;
+  nm = new char[SIZE];
+  strcpy(nm, name);
+
+
   int index = 0;
   for (size_t i=0; i<num_param_sets.size(); i++) {
     index += num_param_sets[i];
   }
 
-	this->name.push_back(name);
+	this->name.push_back(nm);
 	this->params.push_back(params);
 	num_param_sets.push_back(row);
 	num_params.push_back(col);
@@ -186,9 +193,12 @@ void Descriptor::sym_d_g4(double zeta, double lambda, double eta,
       dcosterm_dcos = 0.0;
     }
     else {
-      costerm = pow(base, zeta);
-      dcosterm_dcos = zeta * pow(base, zeta-1) * lambda;
+      double power = fast_pow(base, (int)zeta);
+      double power_minus1 = power/base;
+      costerm = power;
+      dcosterm_dcos = zeta * power_minus1 * lambda;
     }
+
     double dcosterm_dij = dcosterm_dcos * dcos_dij;
     double dcosterm_dik = dcosterm_dcos * dcos_dik;
     double dcosterm_djk = dcosterm_dcos * dcos_djk;
@@ -200,7 +210,9 @@ void Descriptor::sym_d_g4(double zeta, double lambda, double eta,
     double determ_djk = -2*eterm*eta*rjk;
 
     // power 2 term
-    double p2 = pow(2, 1-zeta);
+    //double p2 = std::pow(2, (int)(1-zeta));
+    int tmp = 1 << (int)zeta;  // compute 2^(zeta)
+    double p2 = 2. / tmp;  // compute 2^(1-zeta)
 
     // cutoff
     double fcij = cutoff(rij, rcutij);

@@ -402,9 +402,9 @@ int ANNImplementation::Compute(
       // two-body descriptors
       for (size_t p=0; p<descriptor_->name.size(); p++) {
 
-        if (descriptor_->name[p] != "g1" &&
-            descriptor_->name[p] != "g2" &&
-            descriptor_->name[p] != "g3") {
+        if (strcmp(descriptor_->name[p], "g1") != 0 &&
+            strcmp(descriptor_->name[p], "g2") != 0 &&
+            strcmp(descriptor_->name[p], "g3") != 0) {
           continue;
         }
         int idx = descriptor_->starting_index[p];
@@ -413,14 +413,14 @@ int ANNImplementation::Compute(
 
           double gc;
           double dgcdr_two;
-          if (descriptor_->name[p] == "g1") {
+          if (strcmp(descriptor_->name[p], "g1") == 0) {
             if (need_forces) {
               descriptor_->sym_d_g1(rijmag, rcutij, gc, dgcdr_two);
             } else {
               descriptor_->sym_g1(rijmag, rcutij, gc);
             }
           }
-          else if (descriptor_->name[p] == "g2") {
+          else if (strcmp(descriptor_->name[p], "g2") == 0) {
             double eta = descriptor_->params[p][q][0];
             double Rs = descriptor_->params[p][q][1];
             if (need_forces) {
@@ -429,7 +429,7 @@ int ANNImplementation::Compute(
               descriptor_->sym_g2(eta, Rs, rijmag, rcutij, gc);
             }
           }
-          else if (descriptor_->name[p] == "g3") {
+          else if (strcmp(descriptor_->name[p], "g3") == 0) {
             double kappa = descriptor_->params[p][q][0];
             if (need_forces) {
               descriptor_->sym_d_g3(kappa, rijmag, rcutij, gc, dgcdr_two);
@@ -482,8 +482,9 @@ int ANNImplementation::Compute(
 
         for (size_t p=0; p<descriptor_->name.size(); p++) {
 
-          if (descriptor_->name[p] != "g4" &&
-              descriptor_->name[p] != "g5") {
+
+          if (strcmp(descriptor_->name[p], "g4") != 0 &&
+              strcmp(descriptor_->name[p], "g5") != 0) {
             continue;
           }
           int idx = descriptor_->starting_index[p];
@@ -492,7 +493,7 @@ int ANNImplementation::Compute(
 
             double gc;
             double dgcdr_three[3];
-            if (descriptor_->name[p] == "g4") {
+            if (strcmp(descriptor_->name[p], "g4") == 0) {
               double zeta = descriptor_->params[p][q][0];
               double lambda = descriptor_->params[p][q][1];
               double eta = descriptor_->params[p][q][2];
@@ -502,7 +503,7 @@ int ANNImplementation::Compute(
                 descriptor_->sym_g4(zeta, lambda, eta, rvec, rcutvec, gc);
               }
             }
-            else if (descriptor_->name[p] == "g5") {
+            else if (strcmp(descriptor_->name[p], "g5") == 0) {
               double zeta = descriptor_->params[p][q][0];
               double lambda = descriptor_->params[p][q][1];
               double eta = descriptor_->params[p][q][2];
