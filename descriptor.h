@@ -32,6 +32,16 @@ class Descriptor
     std::vector<double> features_std;
 
 
+    // distinct values of parameters
+    std::vector<double> g4_distinct_zeta;
+    std::vector<double> g4_distinct_lambda;
+    std::vector<double> g4_distinct_eta;
+    // index of each parameter in distinct values
+    std::vector<int> g4_lookup_zeta;
+    std::vector<int> g4_lookup_lambda;
+    std::vector<int> g4_lookup_eta;
+
+
     Descriptor();
 		~Descriptor();
 
@@ -53,13 +63,25 @@ class Descriptor
         const double* r, const double* rcut, double &phi);
 
     void sym_d_g1(double r, double rcut, double &phi, double &dphi);
-    void sym_d_g2(double eta, double Rs, double r, double rcut, double &phi,
+    void sym_d_g2(const double eta, const double Rs, const double r, const double rcut,
+        const double fcij, const double dfcij, double &phi,
         double &dphi);
     void sym_d_g3(double kappa, double r, double rcut, double &phi, double &dphi);
-    void sym_d_g4(double zeta, double lambda, double eta,
-        const double* r, const double* rcut, double &phi, double* const dphi);
+    void sym_d_g4(const double zeta, const double lambda, const double eta,
+        const double* const r, const double* const rcut,
+        const double fcij, const double fcik, const double fcjk, const double dfcij, const double dfcik, const double dfcjk,
+        double &phi, double* const dphi);
+
+ void sym_d_g4_2(const double* const r, const double* const rcut,
+     const double fcprod,  const double* dfcprod_dr,
+     const double costerm, const double* dcosterm_dr,
+     const double eterm, const double* determ_dr,
+     double &phi, double* const dphi);
+
     void sym_d_g5(double zeta, double lambda, double eta,
         const double* r, const double* rcut, double &phi, double* const dphi);
+
+    void create_g4_lookup();
 
 
 //TODO delete; for debug purpose
@@ -173,6 +195,12 @@ inline double fast_pow(double base, int n) {
 
   return power;
 }
+
+
+void add_distinct_value(double v, std::vector<double>& v_vec, double eps=1e-10);
+int find_index(double v, std::vector<double>& v_vec, double eps=1e-10);
+
+
 
 
 

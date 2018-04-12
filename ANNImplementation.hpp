@@ -345,6 +345,23 @@ int ANNImplementation::Compute(
 
 
 
+  const int Ndescriptors = descriptor_->get_num_descriptors();
+
+
+  // Allocate memoory for precompute values of sym g4
+  size_t n_lambda = descriptor_->g4_distinct_lambda.size();
+  size_t n_zeta = descriptor_->g4_distinct_zeta.size();
+  size_t n_eta = descriptor_->g4_distinct_eta.size();
+  double** costerm;
+  double*** dcosterm_dr;
+  double* eterm;
+  double** determ_dr;
+  AllocateAndInitialize2DArray(costerm, n_lambda, n_zeta);
+  AllocateAndInitialize3DArray(dcosterm_dr, n_lambda, n_zeta, 3);
+  AllocateAndInitialize1DArray(eterm, n_eta);
+  AllocateAndInitialize2DArray(determ_dr, n_eta, 3);
+
+
   // calculate generalized coordiantes
   //
   // Setup loop over contributing particles
@@ -368,11 +385,9 @@ int ANNImplementation::Compute(
     int const * const n1Atom = n1atom;
 
 
-
     // setting up generalzied coords matrix and the its derivative w.r.t. atomic coords
     double* GC;
     double** dGCdr;
-    const int Ndescriptors = descriptor_->get_num_descriptors();
     AllocateAndInitialize1DArray(GC, Ndescriptors);
     AllocateAndInitialize2DArray(dGCdr, Ndescriptors, DIM*(numNei+1));  // last slot for atom i
 
@@ -392,7 +407,8 @@ int ANNImplementation::Compute(
       for (int dim = 0; dim < DIM; ++dim) {
         rij[dim] = coordinates[j][dim] - coordinates[i][dim];
       }
-      double const rijmag = sqrt(rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2]);
+      double const rijsq = rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2];
+      double const rijmag = sqrt(rijsq);
 
       // if particles i and j not interact
       if (rijmag > rcutij) continue;
@@ -400,59 +416,80 @@ int ANNImplementation::Compute(
       // Note, this part can be packed into a function as Behler 2001
       // Then we can support other descriptors
       // two-body descriptors
-      for (size_t p=0; p<descriptor_->name.size(); p++) {
+   //   for (size_t p=0; p<descriptor_->name.size(); p++) {
 
-        if (strcmp(descriptor_->name[p], "g1") != 0 &&
-            strcmp(descriptor_->name[p], "g2") != 0 &&
-            strcmp(descriptor_->name[p], "g3") != 0) {
-          continue;
-        }
+        int p=0;
+
+//        if (strcmp(descriptor_->name[p], "g1") != 0 &&
+//            strcmp(descriptor_->name[p], "g2") != 0 &&
+//            strcmp(descriptor_->name[p], "g3") != 0) {
+//          continue;
+//        }
+
+
         int idx = descriptor_->starting_index[p];
+
+
+
+        double fcij = cut_cos(rijmag, rcutij);
+        double dfcij = d_cut_cos(rijmag, rcutij);
+
 
         for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
 
           double gc;
           double dgcdr_two;
-          if (strcmp(descriptor_->name[p], "g1") == 0) {
-            if (need_forces) {
-              descriptor_->sym_d_g1(rijmag, rcutij, gc, dgcdr_two);
-            } else {
-              descriptor_->sym_g1(rijmag, rcutij, gc);
-            }
-          }
-          else if (strcmp(descriptor_->name[p], "g2") == 0) {
+
+//          if (strcmp(descriptor_->name[p], "g1") == 0) {
+//            if (need_forces) {
+//              descriptor_->sym_d_g1(rijmag, rcutij, gc, dgcdr_two);
+//            } else {
+//              descriptor_->sym_g1(rijmag, rcutij, gc);
+//            }
+//          }
+//          else if (strcmp(descriptor_->name[p], "g2") == 0) {
             double eta = descriptor_->params[p][q][0];
             double Rs = descriptor_->params[p][q][1];
-            if (need_forces) {
-              descriptor_->sym_d_g2(eta, Rs, rijmag, rcutij, gc, dgcdr_two);
-            } else {
-              descriptor_->sym_g2(eta, Rs, rijmag, rcutij, gc);
-            }
-          }
-          else if (strcmp(descriptor_->name[p], "g3") == 0) {
-            double kappa = descriptor_->params[p][q][0];
-            if (need_forces) {
-              descriptor_->sym_d_g3(kappa, rijmag, rcutij, gc, dgcdr_two);
-            } else {
-              descriptor_->sym_g3(kappa, rijmag, rcutij, gc);
-            }
-          }
+//            if (need_forces) {
+              descriptor_->sym_d_g2(eta, Rs, rijmag, rcutij, fcij, dfcij, gc, dgcdr_two);
+//            } else {
+//              descriptor_->sym_g2(eta, Rs, rijmag, rcutij, gc);
+//            }
+//          }
+//          else if (strcmp(descriptor_->name[p], "g3") == 0) {
+//            double kappa = descriptor_->params[p][q][0];
+//            if (need_forces) {
+//              descriptor_->sym_d_g3(kappa, rijmag, rcutij, gc, dgcdr_two);
+//            } else {
+//              descriptor_->sym_g3(kappa, rijmag, rcutij, gc);
+//            }
+//          }
+//
 
           GC[idx] += gc;
-          if (need_forces) {
+//          if (need_forces) {
             for (int kdim = 0; kdim < DIM; ++kdim) {
               double pair = dgcdr_two*rij[kdim]/rijmag;
               dGCdr[idx][numNei*DIM+kdim] += pair;   // for i atom
               dGCdr[idx][jj*DIM+kdim] -= pair;   // for neighboring atoms of i
             }
-          }
+//          }
           idx += 1;
 
         } // loop over same descriptor but different parameter set
-      } // loop over descriptors
+  //    } // loop over descriptors
+
+
+
+
+
+
+
+
+
 
       // three-body descriptors
-      if (descriptor_->has_three_body == false) continue;
+//      if (descriptor_->has_three_body == false) continue;
 
       for (int kk = jj+1; kk < numNei; ++kk) {
 
@@ -461,7 +498,6 @@ int ANNImplementation::Compute(
         int const kSpecies = particleSpecies[k];
 
         // cutoff between ik and jk
-        double const rcutij = sqrt(cutoffsSq2D_samelayer_[iSpecies][jSpecies]);
         double const rcutik = sqrt(cutoffsSq2D_samelayer_[iSpecies][kSpecies]);
         double const rcutjk = sqrt(cutoffsSq2D_samelayer_[jSpecies][kSpecies]);
 
@@ -472,51 +508,153 @@ int ANNImplementation::Compute(
           rik[dim] = coordinates[k][dim] - coordinates[i][dim];
           rjk[dim] = coordinates[k][dim] - coordinates[j][dim];
         }
-        double const rikmag = sqrt(rik[0]*rik[0] + rik[1]*rik[1] + rik[2]*rik[2]);
-        double const rjkmag = sqrt(rjk[0]*rjk[0] + rjk[1]*rjk[1] + rjk[2]*rjk[2]);
+        double const riksq = rik[0]*rik[0] + rik[1]*rik[1] + rik[2]*rik[2];
+        double const rjksq = rjk[0]*rjk[0] + rjk[1]*rjk[1] + rjk[2]*rjk[2];
+        double const rikmag = sqrt(riksq);
+        double const rjkmag = sqrt(rjksq);
+
 
         double const rvec[3] = {rijmag, rikmag, rjkmag};
         double const rcutvec[3] = {rcutij, rcutik, rcutjk};
 
         if (rikmag > rcutik) continue; // three-dody not interacting
 
-        for (size_t p=0; p<descriptor_->name.size(); p++) {
+//        for (size_t p=0; p<descriptor_->name.size(); p++) {
+
+          int p = 1;
+
+//          if (strcmp(descriptor_->name[p], "g4") != 0 &&
+//              strcmp(descriptor_->name[p], "g5") != 0) {
+//            continue;
+//          }
 
 
-          if (strcmp(descriptor_->name[p], "g4") != 0 &&
-              strcmp(descriptor_->name[p], "g5") != 0) {
-            continue;
-          }
+
+          if (rjkmag > rcutjk) continue; // only for g4, not for g4
+
           int idx = descriptor_->starting_index[p];
+
+
+
+          // cutoff term, i.e. the product of fc(rij), fc(rik), and fc(rjk)
+          double fcik = cut_cos(rikmag, rcutik);
+          double fcjk = cut_cos(rjkmag, rcutjk);
+          double dfcik = d_cut_cos(rikmag, rcutik);
+          double dfcjk = d_cut_cos(rjkmag, rcutjk);
+          double fcprod = fcij*fcik*fcjk;
+          double dfcprod_dr[3];    // dfcprod/drij, dfcprod/drik, dfcprod/drjk
+          dfcprod_dr[0] = dfcij*fcik*fcjk;
+          dfcprod_dr[1] = dfcik*fcij*fcjk;
+          dfcprod_dr[2] = dfcjk*fcij*fcik;
+
+
+          // cosine term, all terms associated with lambda and zeta, including 2^(1-zeta)
+          // i is the apex atom
+          double cos_ijk = (rijsq + riksq - rjksq)/(2*rijmag*rikmag);
+          double dcos_dij = (rijsq - riksq + rjksq)/(2*rijsq*rikmag);
+          double dcos_dik = (riksq - rijsq + rjksq)/(2*rijmag*riksq);
+          double dcos_djk = -rjkmag/(rijmag*rikmag);
+
+
+          for (int ilam=0; ilam<n_lambda; ilam++) {
+
+            double lambda = descriptor_->g4_distinct_lambda[ilam];
+            double base = 1 +  lambda * cos_ijk;
+
+            for (int izeta=0; izeta<n_zeta; izeta++) {
+
+              double zeta = descriptor_->g4_distinct_zeta[izeta];
+
+              int tmp = 1 << (int)zeta;  // 2^(zeta)
+              double p2 = 2. / tmp;  // 2^(1-zeta)
+
+
+
+              if (base <= 0) { // prevent numerical unstability (when lambd=-1 and cos_ijk=1)
+                costerm[ilam][izeta] = 0.0;
+                dcosterm_dr[ilam][izeta][0] = 0.0;
+                dcosterm_dr[ilam][izeta][1] = 0.0;
+                dcosterm_dr[ilam][izeta][2] = 0.0;
+              }
+              else {
+                double power = p2 * fast_pow(base, (int) zeta);
+                double dcosterm_dcos = zeta * power/base * lambda;
+                costerm[ilam][izeta] = power;
+                dcosterm_dr[ilam][izeta][0] = dcosterm_dcos * dcos_dij;
+                dcosterm_dr[ilam][izeta][1] = dcosterm_dcos * dcos_dik;
+                dcosterm_dr[ilam][izeta][2] = dcosterm_dcos * dcos_djk;
+              }
+            }
+          }
+
+
+          // exponential term
+          double rsq = rijsq + riksq + rjksq;
+          for (int ieta=0; ieta<n_eta; ieta++) {
+            double eta = descriptor_->g4_distinct_eta[ieta];
+            eterm[ieta] = exp(-eta * rsq);
+            double factor = -2*eterm[ieta]*eta;
+            determ_dr[ieta][0] = factor*rijmag;
+            determ_dr[ieta][1] = factor*rikmag;
+            determ_dr[ieta][2] = factor*rjkmag;
+          }
+
+
+
 
           for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
 
             double gc;
             double dgcdr_three[3];
-            if (strcmp(descriptor_->name[p], "g4") == 0) {
-              double zeta = descriptor_->params[p][q][0];
-              double lambda = descriptor_->params[p][q][1];
-              double eta = descriptor_->params[p][q][2];
-              if (need_forces) {
-                descriptor_->sym_d_g4(zeta, lambda, eta, rvec, rcutvec, gc, dgcdr_three);
-              } else {
-                descriptor_->sym_g4(zeta, lambda, eta, rvec, rcutvec, gc);
-              }
-            }
-            else if (strcmp(descriptor_->name[p], "g5") == 0) {
-              double zeta = descriptor_->params[p][q][0];
-              double lambda = descriptor_->params[p][q][1];
-              double eta = descriptor_->params[p][q][2];
-              if (need_forces) {
-                descriptor_->sym_d_g5(zeta, lambda, eta, rvec, rcutvec, gc, dgcdr_three);
-              } else {
-                descriptor_->sym_g5(zeta, lambda, eta, rvec, rcutvec, gc);
-              }
-            }
 
+//            if (strcmp(descriptor_->name[p], "g4") == 0) {
+
+//              if (need_forces) {
+                //descriptor_->sym_d_g4(zeta, lambda, eta, rvec, rcutvec, fcij, fcik, fcjk, dfcij, dfcik, dfcjk, gc, dgcdr_three);
+
+                //descriptor_->sym_d_g4_2(zeta, lambda, eta, rvec, rcutvec, fcij, fcik, fcjk, dfcij, dfcik, dfcjk, gc, dgcdr_three);
+
+                // get values from precomputed
+                int izeta = descriptor_->g4_lookup_zeta[q];
+                int ilam = descriptor_->g4_lookup_lambda[q];
+                int ieta = descriptor_->g4_lookup_eta[q];
+
+                double ct = costerm[ilam][izeta];
+                double dct[3];
+                dct[0] = dcosterm_dr[ilam][izeta][0];
+                dct[1] = dcosterm_dr[ilam][izeta][1];
+                dct[2] = dcosterm_dr[ilam][izeta][2];
+
+                double et = eterm[ieta];
+                double det[3];
+                det[0] = determ_dr[ieta][0];
+                det[1] = determ_dr[ieta][1];
+                det[2] = determ_dr[ieta][2];
+
+
+                descriptor_->sym_d_g4_2(rvec, rcutvec, fcprod, dfcprod_dr, ct, dct, et, det, gc, dgcdr_three);
+
+
+
+//              } else {
+//                descriptor_->sym_g4(zeta, lambda, eta, rvec, rcutvec, gc);
+//              }
+//            }
+//            else if (strcmp(descriptor_->name[p], "g5") == 0) {
+//              double zeta = descriptor_->params[p][q][0];
+//              double lambda = descriptor_->params[p][q][1];
+//              double eta = descriptor_->params[p][q][2];
+//              if (need_forces) {
+//                descriptor_->sym_d_g5(zeta, lambda, eta, rvec, rcutvec, gc, dgcdr_three);
+//              } else {
+//                descriptor_->sym_g5(zeta, lambda, eta, rvec, rcutvec, gc);
+//              }
+//            }
+//
             GC[idx] += gc;
 
-            if (need_forces) {
+
+//            if (need_forces) {
               for (int kdim = 0; kdim < DIM; ++kdim) {
                 double pair_ij = dgcdr_three[0]*rij[kdim]/rijmag;
                 double pair_ik = dgcdr_three[1]*rik[kdim]/rikmag;
@@ -525,13 +663,17 @@ int ANNImplementation::Compute(
                 dGCdr[idx][jj*DIM+kdim] += -pair_ij + pair_jk;    // for neighboring atoms of i
                 dGCdr[idx][kk*DIM+kdim] += -pair_ik - pair_jk;    // for neighboring atoms of i
               }
-            }
+//            }
+
             idx += 1;
 
           } // loop over same descriptor but different parameter set
-        }  // loop over descriptors
+
+
+
+//        }  // loop over descriptors
       }  // loop over kk (three body neighbors)
-    }  // end of first neighbor loop
+    }  // loop over jj
 
 
 
@@ -539,13 +681,13 @@ int ANNImplementation::Compute(
     if (descriptor_->center_and_normalize) {
       for (int j=0; j<Ndescriptors; j++) {
         GC[j] = (GC[j] - descriptor_->features_mean[j]) / descriptor_->features_std[j];
-        if (need_forces) {
+//        if (need_forces) {
           for (int k=0; k<numNei+1; k++) {
             for (int kdim=0; kdim<DIM; kdim++) {
               dGCdr[j][k*DIM+kdim] /= descriptor_->features_std[j];
             }
           }
-        }
+//        }
       }
     }
 
@@ -624,8 +766,13 @@ int ANNImplementation::Compute(
     Deallocate2DArray(dGCdr);
     Deallocate1DArray(dEdGC_avg);
 
-  }  // end of loop over contributing particles
+  }  // loop over ii, i.e. contributing particles
 
+
+  Deallocate2DArray(costerm);
+  Deallocate3DArray(dcosterm_dr);
+  Deallocate1DArray(eterm);
+  Deallocate2DArray(determ_dr);
 
   // everything is good
   ier = KIM_STATUS_OK;

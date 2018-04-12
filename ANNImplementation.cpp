@@ -100,6 +100,9 @@ ANNImplementation::ANNImplementation(
   CloseParameterFiles(parameterFilePointers, numberParameterFiles);
   if (*ier < KIM_STATUS_OK) return;
 
+  // precompute lookup table
+  descriptor_->create_g4_lookup();
+
 //TODO enable later
 //  *ier = ConvertUnits(pkim);
 //  if (*ier < KIM_STATUS_OK) return;

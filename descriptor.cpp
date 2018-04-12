@@ -95,13 +95,13 @@ void Descriptor::sym_g2(double eta, double Rs, double r, double rcut, double &ph
   phi = exp(-eta*(r-Rs)*(r-Rs)) * cutoff(r, rcut);
 }
 
-void Descriptor::sym_d_g2(double eta, double Rs, double r, double rcut,
-    double &phi, double &dphi)
+void Descriptor::sym_d_g2(const double eta, const double Rs, const double r, const double rcut,
+    const double fc, const double dfc, double &phi, double &dphi)
 {
   double eterm = exp(-eta*(r-Rs)*(r-Rs));
   double determ = -2*eta*(r-Rs)*eterm;
-  double fc = cutoff(r, rcut);
-  double dfc = d_cutoff(r, rcut);
+  //double fc = cutoff(r, rcut);
+  //double dfc = d_cutoff(r, rcut);
 
   phi = eterm*fc;
   dphi = determ*fc + eterm*dfc;
@@ -159,8 +159,10 @@ void Descriptor::sym_g4(double zeta, double lambda, double eta,
   }
 }
 
-void Descriptor::sym_d_g4(double zeta, double lambda, double eta,
-    const double* r, const double* rcut, double &phi, double* const dphi)
+void Descriptor::sym_d_g4(const double zeta, const double lambda, const double eta,
+    const double* const r, const double* const rcut,
+    const double fcij,  const double fcik, const double fcjk, const double dfcij, const double dfcik, const double dfcjk,
+    double &phi, double* const dphi)
 {
   double rij = r[0];
   double rik = r[1];
@@ -215,13 +217,17 @@ void Descriptor::sym_d_g4(double zeta, double lambda, double eta,
     double p2 = 2. / tmp;  // compute 2^(1-zeta)
 
     // cutoff
-    double fcij = cutoff(rij, rcutij);
-    double fcik = cutoff(rik, rcutik);
-    double fcjk = cutoff(rjk, rcutjk);
+    //double fcij = cutoff(rij, rcutij);
+    //double fcik = cutoff(rik, rcutik);
+    //double fcjk = cutoff(rjk, rcutjk);
     double fcprod = fcij*fcik*fcjk;
-    double dfcprod_dij = d_cutoff(rij, rcutij)*fcik*fcjk;
-    double dfcprod_dik = d_cutoff(rik, rcutik)*fcij*fcjk;
-    double dfcprod_djk = d_cutoff(rjk, rcutjk)*fcij*fcik;
+    //double dfcprod_dij = d_cutoff(rij, rcutij)*fcik*fcjk;
+    //double dfcprod_dik = d_cutoff(rik, rcutik)*fcij*fcjk;
+    //double dfcprod_djk = d_cutoff(rjk, rcutjk)*fcij*fcik;
+    double dfcprod_dij = dfcij*fcik*fcjk;
+    double dfcprod_dik = dfcik*fcij*fcjk;
+    double dfcprod_djk = dfcjk*fcij*fcik;
+
 
     // phi
     phi =  p2 * costerm * eterm * fcprod;
@@ -236,6 +242,46 @@ void Descriptor::sym_d_g4(double zeta, double lambda, double eta,
         + costerm*eterm*dfcprod_djk);
   }
 }
+
+
+
+
+
+
+void Descriptor::sym_d_g4_2(const double* const r, const double* const rcut,
+    const double fcprod,  const double* dfcprod_dr,
+    const double costerm, const double* dcosterm_dr,
+    const double eterm, const double* determ_dr,
+    double &phi, double* const dphi)
+{
+  // 0->rij, 1->rik, 2->rjk
+  if (r[0] > rcut[0] || r[1] > rcut[1] || r[2] > rcut[2]) {
+    phi = 0.0;
+    dphi[0] = 0.0;
+    dphi[1] = 0.0;
+    dphi[2] = 0.0;
+  }
+  else {
+    // phi
+    phi =  costerm * eterm * fcprod;
+    // dphi_dij
+    dphi[0] = dcosterm_dr[0]*eterm*fcprod + costerm*determ_dr[0]*fcprod
+        + costerm*eterm*dfcprod_dr[0];
+    // dphi_dik
+    dphi[1] = dcosterm_dr[1]*eterm*fcprod + costerm*determ_dr[1]*fcprod
+        + costerm*eterm*dfcprod_dr[1];
+    // dphi_djk
+    dphi[2] = dcosterm_dr[2]*eterm*fcprod + costerm*determ_dr[2]*fcprod
+        + costerm*eterm*dfcprod_dr[2];
+  }
+
+}
+
+
+
+
+
+
 
 void Descriptor::sym_g5(double zeta, double lambda, double eta,
     const double* r, const double* rcut, double &phi)
@@ -339,5 +385,103 @@ void Descriptor::sym_d_g5(double zeta, double lambda, double eta,
   }
 }
 
+
+
+
+
+// precompute the distinct of parameter values of g4, and find the
+// index of each parameter in the distinct values array
+void Descriptor::create_g4_lookup() {
+
+  double eps;
+
+  // find distinct values of zeta, lambda, and eta
+  eps = 1e-10;
+  for (size_t p=0; p<this->name.size(); p++) {
+
+    if (strcmp(this->name[p], "g4") == 0) {
+
+      for(int q=0; q<this->num_param_sets[p]; q++) {
+        double zeta = this->params[p][q][0];
+        double lambda = this->params[p][q][1];
+        double eta = this->params[p][q][2];
+        add_distinct_value(zeta, g4_distinct_zeta, eps);
+        add_distinct_value(lambda, g4_distinct_lambda, eps);
+        add_distinct_value(eta, g4_distinct_eta, eps);
+      }
+    }
+  }
+
+  // find index of each parameter in distinct values g4_distinct_zeta, g4_distinct_lambda, and g4_distinct_eta
+  eps = 1e-10;
+  for (size_t p=0; p<this->name.size(); p++) {
+
+    if (strcmp(this->name[p], "g4") == 0) {
+
+      for(int q=0; q<this->num_param_sets[p]; q++) {
+        double zeta = this->params[p][q][0];
+        double lambda = this->params[p][q][1];
+        double eta = this->params[p][q][2];
+
+        int idx;
+        idx = find_index(zeta, g4_distinct_zeta, eps);
+        g4_lookup_zeta.push_back(idx);
+
+        idx = find_index(lambda, g4_distinct_lambda, eps);
+        g4_lookup_lambda.push_back(idx);
+
+        idx = find_index(eta, g4_distinct_eta, eps);
+        g4_lookup_eta.push_back(idx);
+
+      }
+    }
+  }
+
+  //@DEBUG
+/*  print_vector<double> ("g4_distinct_zeta", g4_distinct_zeta);
+  print_vector<double> ("g4_distinct_lambda", g4_distinct_lambda);
+  print_vector<double> ("g4_distinct_eta", g4_distinct_eta);
+  print_vector<int> ("g4_lookup_zeta", g4_lookup_zeta);
+  print_vector<int> ("g4_lookup_lambda", g4_lookup_lambda);
+  print_vector<int> ("g4_lookup_eta", g4_lookup_eta);
+*/
+
+}
+
+
+// add v to v_vec if v is not in v_vec
+// two double considered the same if their abs difference is smaller than eps
+void add_distinct_value(double v, std::vector<double>& v_vec, double eps) {
+
+  bool already_in = false;
+  for (size_t i=0; i<v_vec.size(); i++) {
+    if (std::abs(v - v_vec[i]) < eps) {
+      already_in = true;
+      break;
+    }
+  }
+  if (already_in == false) {
+    v_vec.push_back(v);
+  }
+
+}
+
+// find the index of v in v_vec
+// two double considered the same if their abs difference is smaller than eps
+int find_index(double v, std::vector<double>& v_vec, double eps) {
+  int idx = -1;
+
+  for (size_t i=0; i<v_vec.size(); i++) {
+    if (std::abs(v - v_vec[i]) < eps) {
+      idx = i;
+      break;
+    }
+  }
+  if (idx == -1) {
+    std::cerr<<"KIM model, cannot find v = " <<v<< " int v_vec."<< std::endl;
+  }
+
+  return idx;
+}
 
 
