@@ -413,26 +413,24 @@ int ANNImplementation::Compute(
       // if particles i and j not interact
       if (rijmag > rcutij) continue;
 
+
+      double fcij = cut_cos(rijmag, rcutij);
+      double dfcij = d_cut_cos(rijmag, rcutij);
+
+
       // Note, this part can be packed into a function as Behler 2001
       // Then we can support other descriptors
       // two-body descriptors
-   //   for (size_t p=0; p<descriptor_->name.size(); p++) {
+      for (size_t p=0; p<descriptor_->name.size(); p++) {
 
-        int p=0;
-
-//        if (strcmp(descriptor_->name[p], "g1") != 0 &&
-//            strcmp(descriptor_->name[p], "g2") != 0 &&
-//            strcmp(descriptor_->name[p], "g3") != 0) {
-//          continue;
-//        }
+        if (strcmp(descriptor_->name[p], "g1") != 0 &&
+            strcmp(descriptor_->name[p], "g2") != 0 &&
+            strcmp(descriptor_->name[p], "g3") != 0) {
+          continue;
+        }
 
 
         int idx = descriptor_->starting_index[p];
-
-
-
-        double fcij = cut_cos(rijmag, rcutij);
-        double dfcij = d_cut_cos(rijmag, rcutij);
 
 
         for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
@@ -466,7 +464,7 @@ int ANNImplementation::Compute(
 //          }
 //
 
-          GC[idx] += gc;
+            GC[idx] += gc;
 //          if (need_forces) {
             for (int kdim = 0; kdim < DIM; ++kdim) {
               double pair = dgcdr_two*rij[kdim]/rijmag;
@@ -477,11 +475,7 @@ int ANNImplementation::Compute(
           idx += 1;
 
         } // loop over same descriptor but different parameter set
-  //    } // loop over descriptors
-
-
-
-
+      } // loop over descriptors
 
 
 
@@ -519,31 +513,29 @@ int ANNImplementation::Compute(
 
         if (rikmag > rcutik) continue; // three-dody not interacting
 
-//        for (size_t p=0; p<descriptor_->name.size(); p++) {
-
-          int p = 1;
-
-//          if (strcmp(descriptor_->name[p], "g4") != 0 &&
-//              strcmp(descriptor_->name[p], "g5") != 0) {
-//            continue;
-//          }
+        //@TEMP only for g4
+        if (rjkmag > rcutjk) continue; // only for g4, not for g4
 
 
 
-          if (rjkmag > rcutjk) continue; // only for g4, not for g4
+        // cutoff term, i.e. the product of fc(rij), fc(rik), and fc(rjk)
+        double fcik = cut_cos(rikmag, rcutik);
+        double fcjk = cut_cos(rjkmag, rcutjk);
+        double dfcik = d_cut_cos(rikmag, rcutik);
+        double dfcjk = d_cut_cos(rjkmag, rcutjk);
+        double fcprod = fcij*fcik*fcjk;
+        double dfcprod_dr[3];    // dfcprod/drij, dfcprod/drik, dfcprod/drjk
+        dfcprod_dr[0] = dfcij*fcik*fcjk;
+        dfcprod_dr[1] = dfcik*fcij*fcjk;
+        dfcprod_dr[2] = dfcjk*fcij*fcik;
 
 
+        for (size_t p=0; p<descriptor_->name.size(); p++) {
 
-          // cutoff term, i.e. the product of fc(rij), fc(rik), and fc(rjk)
-          double fcik = cut_cos(rikmag, rcutik);
-          double fcjk = cut_cos(rjkmag, rcutjk);
-          double dfcik = d_cut_cos(rikmag, rcutik);
-          double dfcjk = d_cut_cos(rjkmag, rcutjk);
-          double fcprod = fcij*fcik*fcjk;
-          double dfcprod_dr[3];    // dfcprod/drij, dfcprod/drik, dfcprod/drjk
-          dfcprod_dr[0] = dfcij*fcik*fcjk;
-          dfcprod_dr[1] = dfcik*fcij*fcjk;
-          dfcprod_dr[2] = dfcjk*fcij*fcik;
+          if (strcmp(descriptor_->name[p], "g4") != 0 &&
+              strcmp(descriptor_->name[p], "g5") != 0) {
+            continue;
+          }
 
           // precompute recurring values in cosine terms and exponential terms
           descriptor_->precompute_g4(rijmag, rikmag, rjkmag, rijsq, riksq, rjksq,
@@ -595,7 +587,8 @@ int ANNImplementation::Compute(
 //              }
 //            }
 //
-            GC[idx] += gc;
+
+              GC[idx] += gc;
 
 
 //            if (need_forces) {
@@ -615,11 +608,21 @@ int ANNImplementation::Compute(
 
 
 
-//        }  // loop over descriptors
+        }  // loop over descriptors
       }  // loop over kk (three body neighbors)
     }  // loop over jj
 
 
+/*
+    //@DEBUG delete debug (print generalized coords normalized)
+    std::cout<<"\n# Debug descriptor values before normalization" << std::endl;
+    std::cout<<"# atom id    descriptor values ..." << std::endl;
+    std::cout<< ii <<"    ";
+    for(int j=0; j<Ndescriptors; j++) {
+      printf("%.15f ",GC[j]);
+    }
+    std::cout<<std::endl;
+*/
 
     // centering and normalization
     if (descriptor_->center_and_normalize) {
@@ -634,6 +637,20 @@ int ANNImplementation::Compute(
 //        }
       }
     }
+
+
+
+/*
+    //@DEBUG delete debug (print generalized coords normalized)
+    std::cout<<"\n\n# Debug descriptor values after normalization" << std::endl;
+    std::cout<<"# atom id    descriptor values ..." << std::endl;
+    std::cout<< ii <<"    ";
+    for(int j=0; j<Ndescriptors; j++) {
+      printf("%.15f ",GC[j]);
+    }
+    std::cout<<std::endl;
+*/
+
 
 
     // NN feedforward

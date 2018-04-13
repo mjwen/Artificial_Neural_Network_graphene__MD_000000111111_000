@@ -186,29 +186,46 @@ inline double fast_pow(double base, int n) {
 
   double power = 0.0;
   switch(n) {
-    case 1: power = base;
-            break;
-    case 2: power = pow2(base);
-            break;
-    case 4: power = pow4(base);
-            break;
-    case 8: power = pow8(base);
-            break;
-    case 16: power = pow16(base);
-            break;
-    default: std::cerr <<"KIM potential, not supported fast_pow n = "<<n<<std::endl;
+    case 1:
+      power = base;
+      break;
+    case 2:
+      power = pow2(base);
+      break;
+    case 4:
+      power = pow4(base);
+      break;
+    case 8:
+      power = pow8(base);
+      break;
+    case 16:
+      power = pow16(base);
+      break;
+    default:
+      power = std::pow(base, n);
+      std::cerr <<"Warning: KIM potential, `fast_pow` does not support n = "
+        << n << ". Using `std::pow`, which may be slow."<<std::endl;
   }
 
   return power;
 }
 
 
+// check wheter a double is a whole number
+inline bool check_whole(double x) {
+
+  if (std::ceil(x) == x) {
+    return true;
+  }
+  else {
+    return false;
+  }
+
+}
+
+
 void add_distinct_value(double v, std::vector<double>& v_vec, double eps=1e-10);
 int find_index(double v, std::vector<double>& v_vec, double eps=1e-10);
-
-
-
-
 
 
 #endif // DESCRIPTOR_H_

@@ -469,6 +469,13 @@ void Descriptor::create_g4_lookup() {
         double zeta = this->params[p][q][0];
         double lambda = this->params[p][q][1];
         double eta = this->params[p][q][2];
+
+        // check wheter zeta is whole number. `fast_power` we implemented only supports integers
+        if (check_whole(zeta) == false) {
+          std::cerr<<"Error in KIM Potential: this model only supports integer `zeta` in `g4`."<<std::endl;
+          exit(1);
+        }
+
         add_distinct_value(zeta, g4_distinct_zeta, eps);
         add_distinct_value(lambda, g4_distinct_lambda, eps);
         add_distinct_value(eta, g4_distinct_eta, eps);
@@ -543,6 +550,7 @@ int find_index(double v, std::vector<double>& v_vec, double eps) {
   }
   if (idx == -1) {
     std::cerr<<"KIM model, cannot find v = " <<v<< " int v_vec."<< std::endl;
+    exit(1);
   }
 
   return idx;
