@@ -161,7 +161,8 @@ void Descriptor::sym_g4(double zeta, double lambda, double eta,
 
 void Descriptor::sym_d_g4(const double zeta, const double lambda, const double eta,
     const double* const r, const double* const rcut,
-    const double fcij,  const double fcik, const double fcjk, const double dfcij, const double dfcik, const double dfcjk,
+    const double fcij,  const double fcik, const double fcjk,
+    const double dfcij, const double dfcik, const double dfcjk,
     double &phi, double* const dphi)
 {
   double rij = r[0];
@@ -385,6 +386,69 @@ void Descriptor::sym_d_g5(double zeta, double lambda, double eta,
   }
 }
 
+
+
+// precompute the terms associated with parameters of g4
+void Descriptor::precompute_g4(
+    const double rijmag, const double rikmag, const double rjkmag,
+    const double rijsq, const double riksq, const double rjksq,
+    const int n_lambda, const int n_zeta, const int n_eta,
+    double**const costerm, double*** const dcosterm_dr,
+    double*const eterm, double** const determ_dr)
+{
+
+  // cosine term, all terms associated with lambda and zeta, including 2^(1-zeta)
+  // i is the apex atom
+  double cos_ijk = (rijsq + riksq - rjksq)/(2*rijmag*rikmag);
+  double dcos_dij = (rijsq - riksq + rjksq)/(2*rijsq*rikmag);
+  double dcos_dik = (riksq - rijsq + rjksq)/(2*rijmag*riksq);
+  double dcos_djk = -rjkmag/(rijmag*rikmag);
+
+
+  for (int ilam=0; ilam<n_lambda; ilam++) {
+
+    double lambda = g4_distinct_lambda[ilam];
+    double base = 1 +  lambda * cos_ijk;
+
+    for (int izeta=0; izeta<n_zeta; izeta++) {
+
+      double zeta = g4_distinct_zeta[izeta];
+
+      int tmp = 1 << (int)zeta;  // 2^(zeta)
+      double p2 = 2. / tmp;  // 2^(1-zeta)
+
+
+
+      if (base <= 0) { // prevent numerical unstability (when lambd=-1 and cos_ijk=1)
+        costerm[ilam][izeta] = 0.0;
+        dcosterm_dr[ilam][izeta][0] = 0.0;
+        dcosterm_dr[ilam][izeta][1] = 0.0;
+        dcosterm_dr[ilam][izeta][2] = 0.0;
+      }
+      else {
+        double power = p2 * fast_pow(base, (int) zeta);
+        double dcosterm_dcos = zeta * power/base * lambda;
+        costerm[ilam][izeta] = power;
+        dcosterm_dr[ilam][izeta][0] = dcosterm_dcos * dcos_dij;
+        dcosterm_dr[ilam][izeta][1] = dcosterm_dcos * dcos_dik;
+        dcosterm_dr[ilam][izeta][2] = dcosterm_dcos * dcos_djk;
+      }
+    }
+  }
+
+
+  // exponential term
+  double rsq = rijsq + riksq + rjksq;
+  for (int ieta=0; ieta<n_eta; ieta++) {
+    double eta = g4_distinct_eta[ieta];
+    eterm[ieta] = exp(-eta * rsq);
+    double factor = -2*eterm[ieta]*eta;
+    determ_dr[ieta][0] = factor*rijmag;
+    determ_dr[ieta][1] = factor*rikmag;
+    determ_dr[ieta][2] = factor*rjkmag;
+  }
+
+}
 
 
 

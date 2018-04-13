@@ -72,16 +72,22 @@ class Descriptor
         const double fcij, const double fcik, const double fcjk, const double dfcij, const double dfcik, const double dfcjk,
         double &phi, double* const dphi);
 
- void sym_d_g4_2(const double* const r, const double* const rcut,
-     const double fcprod,  const double* dfcprod_dr,
-     const double costerm, const double* dcosterm_dr,
-     const double eterm, const double* determ_dr,
-     double &phi, double* const dphi);
+    void sym_d_g4_2(const double* const r, const double* const rcut,
+       const double fcprod,  const double* dfcprod_dr,
+       const double costerm, const double* dcosterm_dr,
+       const double eterm, const double* determ_dr,
+       double &phi, double* const dphi);
 
     void sym_d_g5(double zeta, double lambda, double eta,
         const double* r, const double* rcut, double &phi, double* const dphi);
 
     void create_g4_lookup();
+
+    void precompute_g4(const double rijmag, const double rikmag, const double rjkmag,
+        const double rijsq, const double riksq, const double rjksq,
+        const int n_lambda, const int n_zeta, const int n_eta,
+        double** const costerm, double*** const dcosterm_dr,
+        double* const eterm, double** const determ_dr);
 
 
 //TODO delete; for debug purpose

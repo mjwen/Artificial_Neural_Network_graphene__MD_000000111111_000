@@ -532,8 +532,6 @@ int ANNImplementation::Compute(
 
           if (rjkmag > rcutjk) continue; // only for g4, not for g4
 
-          int idx = descriptor_->starting_index[p];
-
 
 
           // cutoff term, i.e. the product of fc(rij), fc(rik), and fc(rjk)
@@ -547,60 +545,12 @@ int ANNImplementation::Compute(
           dfcprod_dr[1] = dfcik*fcij*fcjk;
           dfcprod_dr[2] = dfcjk*fcij*fcik;
 
-
-          // cosine term, all terms associated with lambda and zeta, including 2^(1-zeta)
-          // i is the apex atom
-          double cos_ijk = (rijsq + riksq - rjksq)/(2*rijmag*rikmag);
-          double dcos_dij = (rijsq - riksq + rjksq)/(2*rijsq*rikmag);
-          double dcos_dik = (riksq - rijsq + rjksq)/(2*rijmag*riksq);
-          double dcos_djk = -rjkmag/(rijmag*rikmag);
+          // precompute recurring values in cosine terms and exponential terms
+          descriptor_->precompute_g4(rijmag, rikmag, rjkmag, rijsq, riksq, rjksq,
+               n_lambda, n_zeta, n_eta, costerm, dcosterm_dr, eterm, determ_dr);
 
 
-          for (int ilam=0; ilam<n_lambda; ilam++) {
-
-            double lambda = descriptor_->g4_distinct_lambda[ilam];
-            double base = 1 +  lambda * cos_ijk;
-
-            for (int izeta=0; izeta<n_zeta; izeta++) {
-
-              double zeta = descriptor_->g4_distinct_zeta[izeta];
-
-              int tmp = 1 << (int)zeta;  // 2^(zeta)
-              double p2 = 2. / tmp;  // 2^(1-zeta)
-
-
-
-              if (base <= 0) { // prevent numerical unstability (when lambd=-1 and cos_ijk=1)
-                costerm[ilam][izeta] = 0.0;
-                dcosterm_dr[ilam][izeta][0] = 0.0;
-                dcosterm_dr[ilam][izeta][1] = 0.0;
-                dcosterm_dr[ilam][izeta][2] = 0.0;
-              }
-              else {
-                double power = p2 * fast_pow(base, (int) zeta);
-                double dcosterm_dcos = zeta * power/base * lambda;
-                costerm[ilam][izeta] = power;
-                dcosterm_dr[ilam][izeta][0] = dcosterm_dcos * dcos_dij;
-                dcosterm_dr[ilam][izeta][1] = dcosterm_dcos * dcos_dik;
-                dcosterm_dr[ilam][izeta][2] = dcosterm_dcos * dcos_djk;
-              }
-            }
-          }
-
-
-          // exponential term
-          double rsq = rijsq + riksq + rjksq;
-          for (int ieta=0; ieta<n_eta; ieta++) {
-            double eta = descriptor_->g4_distinct_eta[ieta];
-            eterm[ieta] = exp(-eta * rsq);
-            double factor = -2*eterm[ieta]*eta;
-            determ_dr[ieta][0] = factor*rijmag;
-            determ_dr[ieta][1] = factor*rikmag;
-            determ_dr[ieta][2] = factor*rjkmag;
-          }
-
-
-
+          int idx = descriptor_->starting_index[p];
 
           for(int q=0; q<descriptor_->num_param_sets[p]; q++) {
 
@@ -610,9 +560,6 @@ int ANNImplementation::Compute(
 //            if (strcmp(descriptor_->name[p], "g4") == 0) {
 
 //              if (need_forces) {
-                //descriptor_->sym_d_g4(zeta, lambda, eta, rvec, rcutvec, fcij, fcik, fcjk, dfcij, dfcik, dfcjk, gc, dgcdr_three);
-
-                //descriptor_->sym_d_g4_2(zeta, lambda, eta, rvec, rcutvec, fcij, fcik, fcjk, dfcij, dfcik, dfcjk, gc, dgcdr_three);
 
                 // get values from precomputed
                 int izeta = descriptor_->g4_lookup_zeta[q];
@@ -631,10 +578,7 @@ int ANNImplementation::Compute(
                 det[1] = determ_dr[ieta][1];
                 det[2] = determ_dr[ieta][2];
 
-
                 descriptor_->sym_d_g4_2(rvec, rcutvec, fcprod, dfcprod_dr, ct, dct, et, det, gc, dgcdr_three);
-
-
 
 //              } else {
 //                descriptor_->sym_g4(zeta, lambda, eta, rvec, rcutvec, gc);
