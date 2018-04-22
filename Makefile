@@ -54,8 +54,9 @@ LOCALCLEAN = ANNImplementationComputeDispatch.cpp
 # APPEND to compiler option flag lists
 #FFLAGS   +=
 #CFLAGS   +=
-CXXFLAGS += -std=c++11 -I ~/Applications/eigen
-#LDFLAGS  +=
+#CXXFLAGS += -std=c++11 -I ~/Applications/eigen
+CXXFLAGS += -std=c++11 -fopenmp -I ~/Applications/eigen
+LDFLAGS  += -fopenmp
 
 # load remaining KIM make configuration
 include $(KIM_DIR)/$(builddir)/Makefile.ModelDriver

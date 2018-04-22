@@ -1,6 +1,7 @@
 #include "helper.h"
 #include "descriptor.h"
 #include <iostream>
+#include <omp.h>
 
 
 Descriptor::Descriptor(){
@@ -404,12 +405,14 @@ void Descriptor::precompute_g4(
   double dcos_dik = (riksq - rijsq + rjksq)/(2*rijmag*riksq);
   double dcos_djk = -rjkmag/(rijmag*rikmag);
 
+  int NUM_THREADS = 1;
 
   for (int ilam=0; ilam<n_lambda; ilam++) {
 
     double lambda = g4_distinct_lambda[ilam];
     double base = 1 +  lambda * cos_ijk;
 
+//    #pragma omp parallel for default(none) shared(ilam, lambda, base, cos_ijk, dcos_dij, dcos_dik, dcos_djk) num_threads(NUM_THREADS)
     for (int izeta=0; izeta<n_zeta; izeta++) {
 
       double zeta = g4_distinct_zeta[izeta];

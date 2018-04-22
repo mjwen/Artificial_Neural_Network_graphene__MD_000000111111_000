@@ -31,6 +31,7 @@
 #define ANN_IMPLEMENTATION_HPP_
 
 #include <iomanip>
+#include <omp.h>
 #include "KIM_API_status.h"
 #include "ANN.hpp"
 #include "descriptor.h"
@@ -365,6 +366,9 @@ int ANNImplementation::Compute(
   // calculate generalized coordiantes
   //
   // Setup loop over contributing particles
+
+  int NUM_THREADS=4;
+  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int ii=0; ii<Ncontrib; ii++) {
 
     const int i = ii;
