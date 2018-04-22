@@ -43,7 +43,7 @@ printf "   {\n"                                                >> $flName
 i=0
 for iter in LocatorIterator; do
 	for processdE in false true; do
-		for processd2E in false; do
+		for processd2E in false true; do
 			for energy in false true; do
 				for force in false true; do
 					for particleEnergy in false true; do
