@@ -69,6 +69,7 @@ void Descriptor::set_center_and_normalize(bool do_center_and_normalize, int size
 }
 
 
+// return number of descriptors, both two body and three body
 int Descriptor::get_num_descriptors() {
   int N = 0;
   for (size_t i=0; i<num_param_sets.size(); i++) {
@@ -77,6 +78,34 @@ int Descriptor::get_num_descriptors() {
   return N;
 }
 
+// return number of two-body descriptors
+int Descriptor::get_num_descriptors_two_body() {
+  int N = 0;
+  for (size_t i=0; i<num_param_sets.size(); i++) {
+    char* name = this->name[i];
+    if( strcmp(name, "g1") == 0 || strcmp(name, "g2") ==0  || strcmp(name, "g3") ==0) {
+      N += num_param_sets.at(i);
+    }
+  }
+  return N;
+}
+
+// return number of three-body descriptors
+int Descriptor::get_num_descriptors_three_body() {
+  int N = 0;
+  for (size_t i=0; i<num_param_sets.size(); i++) {
+    char* name = this->name[i];
+    if( strcmp(name, "g4") == 0 || strcmp(name, "g5") ==0) {
+      N += num_param_sets.at(i);
+    }
+  }
+  return N;
+}
+
+// find index of p, q supposing the params has been mapped to 1D
+int Descriptor::get_global_1D_index(const int p, const int q) {
+  return starting_index[p] + q;
+}
 
 //*****************************************************************************
 // Symmetry functions: Jorg Behler, J. Chem. Phys. 134, 074106, 2011.

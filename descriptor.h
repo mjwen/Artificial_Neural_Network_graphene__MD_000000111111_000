@@ -52,6 +52,10 @@ class Descriptor
         double* means, double* stds);
 
     int get_num_descriptors();
+    int get_num_descriptors_two_body();
+    int get_num_descriptors_three_body();
+    int get_global_1D_index(const int p, const int q) ;
+
 
 		// symmetry functions
     void sym_g1(double r, double rcut, double &phi);
@@ -120,7 +124,7 @@ class Descriptor
     }
 
 
-	private:
+	//private:
 		CutoffFunction cutoff;
 		dCutoffFunction d_cutoff;
 };

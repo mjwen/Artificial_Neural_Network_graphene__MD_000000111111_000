@@ -55,6 +55,7 @@ LOCALCLEAN = ANNImplementationComputeDispatch.cpp
 #FFLAGS   +=
 #CFLAGS   +=
 CXXFLAGS += -std=c++11 -I ~/Applications/eigen
+#CXXFLAGS += -std=c++11 -I ~/Applications/eigen -DDEBUG
 #LDFLAGS  +=
 
 # load remaining KIM make configuration
