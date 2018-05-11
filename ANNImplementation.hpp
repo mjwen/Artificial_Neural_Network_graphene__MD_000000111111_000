@@ -153,7 +153,6 @@ class ANNImplementation
   int numberOfSpeciesIndex_;
   int numberOfParticlesIndex_;
   int particleSpeciesIndex_;
-  int particleStatusIndex_;
   int coordinatesIndex_;
   int get_neighIndex_;
   int process_dEdrIndex_;

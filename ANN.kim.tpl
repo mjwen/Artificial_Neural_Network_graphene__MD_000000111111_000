@@ -71,8 +71,6 @@ numberOfSpecies             integer      none                []
 
 particleSpecies             integer      none                [numberOfParticles]
 
-particleStatus              integer      none                [numberOfParticles]
-
 coordinates                 double       length              [numberOfParticles,3]
 
 get_neigh                   method       none                []                 optional

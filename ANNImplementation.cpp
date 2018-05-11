@@ -59,7 +59,6 @@ ANNImplementation::ANNImplementation(
     : numberOfSpeciesIndex_(-1),  // initizlize index, pointer, and cached
       numberOfParticlesIndex_(-1),    // member variables
       particleSpeciesIndex_(-1),
-			particleStatusIndex_(-1),
       coordinatesIndex_(-1),
       get_neighIndex_(-1),
       process_dEdrIndex_(-1),
@@ -202,11 +201,10 @@ int ANNImplementation::SetConstantValues(KIM_API_model* const pkim)
 
   // obtain indices for various KIM API Object arguments
   pkim->getm_index(
-      &ier, 3 * 12,
+      &ier, 3 * 11,
       "numberOfSpecies",             &numberOfSpeciesIndex_,             1,
       "numberOfParticles",           &numberOfParticlesIndex_,           1,
       "particleSpecies",             &particleSpeciesIndex_,             1,
-      "particleStatus",							 &particleStatusIndex_,              1,
       "coordinates",                 &coordinatesIndex_,                 1,
       "get_neigh",                   &get_neighIndex_,                   1,
       "process_dEdr",                &process_dEdrIndex_,                1,
@@ -1013,12 +1011,10 @@ int ANNImplementation::SetComputeMutableValues(
 
   // extract pointers based on compute flags
   int const* numberOfParticles;
-  int const* particleStatus = 0;
   pkim->getm_data_by_index(
-      &ier, 3 * 7,
+      &ier, 3 * 6,
       numberOfParticlesIndex_, &numberOfParticles, 1,
       particleSpeciesIndex_,	 &particleSpecies,	 1,
-      particleStatusIndex_,		 &particleStatus,		 1,
       coordinatesIndex_,			 &coordinates,			 1,
       energyIndex_,						 &energy,						 compEnergy,
       particleEnergyIndex_,		 &particleEnergy,		 compParticleEnergy,
@@ -1039,12 +1035,7 @@ int ANNImplementation::SetComputeMutableValues(
   cachedNumberOfParticles_ = *numberOfParticles;
 
 	// set so that it can be used even with a full neighbor list
-	cachedNumberContributingParticles_ = 0;
-	for (int i=0; i<*numberOfParticles; i++) {
-		if (particleStatus[i] == 1) {
-			cachedNumberContributingParticles_ += 1;
-		}
-	}
+	cachedNumberContributingParticles_ = *numberOfParticles;
 
   // everything is good
   ier = KIM_STATUS_OK;
