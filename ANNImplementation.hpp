@@ -657,6 +657,13 @@ int ANNImplementation::Compute(
     }  // loop over jj
 
 
+    // Note, in KIM-API v1 for full neighbor list, `Ncontrib` is actually the total
+    // number of atoms. For non-contributing atoms, its numNei is set to 0.
+    // So here we need to continue immediately, otherwise energy of noncontributing
+    // atoms will be incorrectly added
+    if(numNei == 0) continue;
+
+
     /*
     //@DEBUG delete debug (print generalized coords normalized)
     std::cout<<"\n# Debug descriptor values before normalization" << std::endl;
