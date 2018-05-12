@@ -61,12 +61,12 @@ ANNImplementation::ANNImplementation(
       particleSpeciesIndex_(-1),
       coordinatesIndex_(-1),
       get_neighIndex_(-1),
-      process_dEdrIndex_(-1),
-      process_d2Edr2Index_(-1),
       cutoffIndex_(-1),
       energyIndex_(-1),
-      forcesIndex_(-1),
       particleEnergyIndex_(-1),
+      forcesIndex_(-1),
+      virialIndex_(-1),
+      particleVirialIndex_(-1),
       numberModelSpecies_(0),
       numberUniqueSpeciesPairs_(0),
       cutoffs_(0),
@@ -151,8 +151,8 @@ int ANNImplementation::Compute(KIM_API_model* const pkim)
   int ier;
 
   // KIM API Model Input compute flags
-  bool isComputeProcess_dEdr;
-  bool isComputeProcess_d2Edr2;
+  bool isComputeVirial;
+  bool isComputeParticleVirial;
   //
   // KIM API Model Output compute flags
   bool isComputeEnergy;
@@ -168,11 +168,15 @@ int ANNImplementation::Compute(KIM_API_model* const pkim)
   double* energy = 0;
   double* particleEnergy = 0;
   VectorOfSizeDIM* forces = 0;
-  ier = SetComputeMutableValues(pkim, isComputeProcess_dEdr,
-                                isComputeProcess_d2Edr2, isComputeEnergy,
+  double* virial = 0;
+  VectorOfSize6* particleVirial = 0;
+  ier = SetComputeMutableValues(pkim, isComputeVirial,
+                                isComputeParticleVirial, isComputeEnergy,
                                 isComputeForces, isComputeParticleEnergy,
                                 particleSpecies, get_neigh,
-                                coordinates, energy, particleEnergy, forces);
+                                coordinates, energy, particleEnergy, forces,
+                                virial,  particleVirial
+                                );
   if (ier < KIM_STATUS_OK) return ier;
 
   // Skip this check for efficiency
@@ -207,12 +211,12 @@ int ANNImplementation::SetConstantValues(KIM_API_model* const pkim)
       "particleSpecies",             &particleSpeciesIndex_,             1,
       "coordinates",                 &coordinatesIndex_,                 1,
       "get_neigh",                   &get_neighIndex_,                   1,
-      "process_dEdr",                &process_dEdrIndex_,                1,
-      "process_d2Edr2",              &process_d2Edr2Index_,              1,
       "cutoff",                      &cutoffIndex_,                      1,
       "energy",                      &energyIndex_,                      1,
       "forces",                      &forcesIndex_,                      1,
-      "particleEnergy",              &particleEnergyIndex_,              1);
+      "particleEnergy",              &particleEnergyIndex_,              1,
+      "virial",                      &virialIndex_,                      1,
+      "particleVirial",              &particleVirialIndex_,              1);
   if (ier < KIM_STATUS_OK) {
     pkim->report_error(__LINE__, __FILE__, "getm_index", ier);
     return ier;
@@ -972,8 +976,8 @@ int ANNImplementation::SetReinitMutableValues(
 //******************************************************************************
 int ANNImplementation::SetComputeMutableValues(
     KIM_API_model* const pkim,
-    bool& isComputeProcess_dEdr,
-    bool& isComputeProcess_d2Edr2,
+    bool& isComputeVirial,
+    bool& isComputeParticleVirial,
     bool& isComputeEnergy,
     bool& isComputeForces,
     bool& isComputeParticleEnergy,
@@ -982,7 +986,10 @@ int ANNImplementation::SetComputeMutableValues(
     VectorOfSizeDIM const*& coordinates,
     double*& energy,
     double*& particleEnergy,
-    VectorOfSizeDIM*& forces)
+    VectorOfSizeDIM*& forces,
+    double*& virial,
+    VectorOfSize6*& particleVirial
+    )
 {
   int ier = KIM_STATUS_FAIL;
 
@@ -990,14 +997,14 @@ int ANNImplementation::SetComputeMutableValues(
   int compEnergy;
   int compForces;
   int compParticleEnergy;
-  int compProcess_dEdr;
-  int compProcess_d2Edr2;
+  int compVirial;
+  int compParticleVirial;
   pkim->getm_compute_by_index(&ier, 3 * 5,
                               energyIndex_,         &compEnergy,         1,
                               forcesIndex_,         &compForces,         1,
                               particleEnergyIndex_, &compParticleEnergy, 1,
-                              process_dEdrIndex_,   &compProcess_dEdr,   1,
-                              process_d2Edr2Index_, &compProcess_d2Edr2, 1);
+                              virialIndex_,         &compVirial,         1,
+                              particleVirialIndex_, &compParticleVirial, 1);
   if (ier < KIM_STATUS_OK) {
     pkim->report_error(__LINE__, __FILE__, "getm_compute_by_index", ier);
     return ier;
@@ -1006,19 +1013,21 @@ int ANNImplementation::SetComputeMutableValues(
   isComputeEnergy = (compEnergy == KIM_COMPUTE_TRUE);
   isComputeForces = (compForces == KIM_COMPUTE_TRUE);
   isComputeParticleEnergy = (compParticleEnergy == KIM_COMPUTE_TRUE);
-  isComputeProcess_dEdr = (compProcess_dEdr == KIM_COMPUTE_TRUE);
-  isComputeProcess_d2Edr2 = (compProcess_d2Edr2 == KIM_COMPUTE_TRUE);
+  isComputeVirial = (compVirial == KIM_COMPUTE_TRUE);
+  isComputeParticleVirial = (compParticleVirial == KIM_COMPUTE_TRUE);
 
   // extract pointers based on compute flags
   int const* numberOfParticles;
   pkim->getm_data_by_index(
-      &ier, 3 * 6,
+      &ier, 3 * 8,
       numberOfParticlesIndex_, &numberOfParticles, 1,
       particleSpeciesIndex_,	 &particleSpecies,	 1,
       coordinatesIndex_,			 &coordinates,			 1,
       energyIndex_,						 &energy,						 compEnergy,
       particleEnergyIndex_,		 &particleEnergy,		 compParticleEnergy,
-      forcesIndex_,						 &forces,						 compForces);
+      forcesIndex_,						 &forces,						 compForces,
+      virialIndex_,						 &virial,						 compVirial,
+      particleVirialIndex_,		 &particleVirial,		 compParticleVirial);
   if (ier < KIM_STATUS_OK) {
     pkim->report_error(__LINE__, __FILE__, "getm_data_by_index", ier);
     return ier;
@@ -1067,14 +1076,14 @@ int ANNImplementation::CheckParticleSpecies(
 
 //******************************************************************************
 int ANNImplementation::GetComputeIndex(
-    const bool& isComputeProcess_dEdr,
-    const bool& isComputeProcess_d2Edr2,
+    const bool& isComputeVirial,
+    const bool& isComputeParticleVirial,
     const bool& isComputeEnergy,
     const bool& isComputeForces,
     const bool& isComputeParticleEnergy) const
 {
   //const int processdE = 2;
-  const int processd2E = 2;
+  const int particleVirial = 2;
   const int energy = 2;
   const int force = 2;
   const int particleEnergy = 2;
@@ -1083,11 +1092,11 @@ int ANNImplementation::GetComputeIndex(
   int index = 0;
 
   // processdE
-  index += (int(isComputeProcess_dEdr))
-      * processd2E * energy * force * particleEnergy;
+  index += (int(isComputeVirial))
+      * particleVirial * energy * force * particleEnergy;
 
   // processd2E
-  index += (int(isComputeProcess_d2Edr2)) * energy * force * particleEnergy;
+  index += (int(isComputeParticleVirial)) * energy * force * particleEnergy;
 
   // energy
   index += (int(isComputeEnergy)) * force * particleEnergy;

@@ -77,9 +77,9 @@ get_neigh                   method       none                []                 
 
 neighObject                 pointer      none                []                 optional
 
-process_dEdr                method       none                []                 optional
+#process_dEdr                method       none                []                 optional
 
-process_d2Edr2              method       none                []                 optional
+#process_d2Edr2              method       none                []                 optional
 
 
 ################################################################################
@@ -100,6 +100,9 @@ forces                      double       force               [numberOfParticles,
 
 particleEnergy              double       energy              [numberOfParticles]    optional
 
+virial                      double       energy              [6]                    optional
+
+particleVirial              double       energy              [numberOfParticles,6]  optional
 
 ################################################################################
 MODEL_PARAMETERS:

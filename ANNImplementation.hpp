@@ -55,6 +55,7 @@ typedef int (GetNeighborFunction)(void**, int*, int*, int*, int*, int**,
                                   double**);
 // type declaration for vector of constant dimension
 typedef double VectorOfSizeDIM[DIM];
+typedef double VectorOfSize6[6];
 
 
 //==============================================================================
@@ -155,14 +156,14 @@ class ANNImplementation
   int particleSpeciesIndex_;
   int coordinatesIndex_;
   int get_neighIndex_;
-  int process_dEdrIndex_;
-  int process_d2Edr2Index_;
   //
   // KIM API: Model Output indices
   int cutoffIndex_;
   int energyIndex_;
-  int forcesIndex_;
   int particleEnergyIndex_;
+  int forcesIndex_;
+  int virialIndex_;
+  int particleVirialIndex_;
   //
   // LennardJones612Implementation: constants
   int numberModelSpecies_;
@@ -252,8 +253,8 @@ class ANNImplementation
   //
   // Related to Compute()
   int SetComputeMutableValues(KIM_API_model* const pkim,
-                              bool& isComputeProcess_dEdr,
-                              bool& isComputeProcess_d2Edr2,
+                              bool& isComputeVirial,
+                              bool& isComputeParticleVirial,
                               bool& isComputeEnergy,
                               bool& isComputeForces,
                               bool& isComputeParticleEnergy,
@@ -262,18 +263,20 @@ class ANNImplementation
                               VectorOfSizeDIM const*& coordinates,
                               double*& energy,
                               double*& particleEnergy,
-                              VectorOfSizeDIM*& forces);
+                              VectorOfSizeDIM*& forces,
+                              double*& virial,
+                              VectorOfSize6*& particleVirial);
   int CheckParticleSpecies(KIM_API_model* const pkim,
                            int const* const particleSpecies) const;
-  int GetComputeIndex(const bool& isComputeProcess_dEdr,
-                      const bool& isComputeProcess_d2Edr2,
+  int GetComputeIndex(const bool& isComputeVirial,
+                      const bool& isComputeParticleVirial,
                       const bool& isComputeEnergy,
                       const bool& isComputeForces,
                       const bool& isComputeParticleEnergy) const;
 
   // compute functions
   template< class Iter,
-            bool isComputeProcess_dEdr, bool isComputeProcess_d2Edr2,
+            bool isComputeVirial, bool isComputeParticleVirial,
             bool isComputeEnergy, bool isComputeForces,
             bool isComputeParticleEnergy>
   int Compute(KIM_API_model* const pkim,
@@ -281,8 +284,11 @@ class ANNImplementation
               GetNeighborFunction* const get_neigh,
               const VectorOfSizeDIM* const coordinates,
               double* const energy,
+              double* const particleEnergy,
               VectorOfSizeDIM* const forces,
-              double* const particleEnergy);
+              double* const  virial,
+              VectorOfSize6* const particleVirial
+              );
 
 };
 
@@ -297,7 +303,7 @@ class ANNImplementation
 //==============================================================================
 
 template< class Iter,
-          bool isComputeProcess_dEdr, bool isComputeProcess_d2Edr2,
+          bool isComputeVirial, bool isComputeParticleVirial,
           bool isComputeEnergy, bool isComputeForces,
           bool isComputeParticleEnergy>
 int ANNImplementation::Compute(
@@ -306,8 +312,11 @@ int ANNImplementation::Compute(
     GetNeighborFunction* const get_neigh,
     const VectorOfSizeDIM* const coordinates,
     double* const energy,
+    double* const particleEnergy,
     VectorOfSizeDIM* const forces,
-    double* const particleEnergy)
+    double* const virial,
+    VectorOfSize6* const particleVirial
+    )
 {
 
 
@@ -316,14 +325,12 @@ int ANNImplementation::Compute(
   if ((isComputeEnergy == false) &&
       (isComputeParticleEnergy == false) &&
       (isComputeForces == false) &&
-      (isComputeProcess_dEdr == false) &&
-      (isComputeProcess_d2Edr2 == false))
+      (isComputeVirial == false) &&
+      (isComputeParticleVirial == false))
     return ier;
 
-  if (isComputeProcess_d2Edr2 == true)
-    std::cerr<<"KIM potential: not supported ComputeProcess_d2Edr2"<<std::endl;
-
-  bool need_dE = (isComputeProcess_dEdr == true) || (isComputeForces == true);
+  bool need_dE = (isComputeForces == true)
+      || (isComputeVirial == true) || (isComputeParticleVirial == true);
 
   // ANNImplementation: values that does not change
   const int Nparticles = cachedNumberOfParticles_;
@@ -343,6 +350,17 @@ int ANNImplementation::Compute(
     for (int i = 0; i < Nparticles; ++i) {
       for (int j = 0; j < DIM; ++j)
         forces[i][j] = 0.0;
+    }
+  }
+  if (isComputeVirial == true) {
+    for (int i = 0; i < 6; ++i) {
+      virial[i] = 0.0;
+    }
+  }
+if (isComputeParticleVirial == true) {
+    for (int i = 0; i < Nparticles; ++i) {
+      for (int j = 0; j < 6; ++j)
+        particleVirial[i][j] = 0.0;
     }
   }
 
@@ -657,11 +675,13 @@ int ANNImplementation::Compute(
     }  // loop over jj
 
 
+
     // Note, in KIM-API v1 for full neighbor list, `Ncontrib` is actually the total
     // number of atoms. For non-contributing atoms, its numNei is set to 0.
     // So here we need to continue immediately, otherwise energy of noncontributing
     // atoms will be incorrectly added
     if(numNei == 0) continue;
+
 
 
     /*
@@ -761,7 +781,6 @@ int ANNImplementation::Compute(
 
         // Compute rij
         double rij[DIM];
-        const double* prij = rij;
         for (int dim = 0; dim < DIM; ++dim) {
           rij[dim] = coordinates[j][dim] - coordinates[i][dim];
         }
@@ -794,18 +813,10 @@ int ANNImplementation::Compute(
           }
         }
 
-        // process_dEdr
-        if (isComputeProcess_dEdr) {
-          int ier = pkim->process_dEdr(const_cast<KIM_API_model**>(&pkim),
-              const_cast<double*>(&dEdr_two),
-              const_cast<double*>(&rijmag),
-              const_cast<double**>(&prij),
-              const_cast<int*>(&i),
-              const_cast<int*>(&j));
-          if (ier < KIM_STATUS_OK) {
-            pkim->report_error(__LINE__, __FILE__, "process_dEdr", ier);
-            return ier;
-          }
+        // virial
+        if (isComputeVirial || isComputeParticleVirial) {
+          virialTally2(isComputeVirial, isComputeParticleVirial,
+              dEdr_two,rijmag,rij, i,j, virial, particleVirial);
         }
 
 
@@ -823,8 +834,6 @@ int ANNImplementation::Compute(
           // Compute rik, rjk and their squares
           double rik[DIM];
           double rjk[DIM];
-          const double* prik = rik;
-          const double* prjk = rjk;
           for (int dim = 0; dim < DIM; ++dim) {
             rik[dim] = coordinates[k][dim] - coordinates[i][dim];
             rjk[dim] = coordinates[k][dim] - coordinates[j][dim];
@@ -869,41 +878,16 @@ int ANNImplementation::Compute(
             }
           }
 
-          // process_dEdr
-          if (isComputeProcess_dEdr) {
-            int ier;
-            ier = pkim->process_dEdr(const_cast<KIM_API_model**>(&pkim),
-                const_cast<double*>(&dEdr_three[0]),
-                const_cast<double*>(&rijmag),
-                const_cast<double**>(&prij),
-                const_cast<int*>(&i),
-                const_cast<int*>(&j));
-            if (ier < KIM_STATUS_OK) {
-              pkim->report_error(__LINE__, __FILE__, "process_dEdr", ier);
-              return ier;
-            }
+          // virial
+          if (isComputeVirial || isComputeParticleVirial) {
+            virialTally2(isComputeVirial, isComputeParticleVirial,
+                dEdr_three[0],rijmag,rij, i,j, virial, particleVirial);
 
-            ier = pkim->process_dEdr(const_cast<KIM_API_model**>(&pkim),
-                const_cast<double*>(&dEdr_three[1]),
-                const_cast<double*>(&rikmag),
-                const_cast<double**>(&prik),
-                const_cast<int*>(&i),
-                const_cast<int*>(&k));
-            if (ier < KIM_STATUS_OK) {
-              pkim->report_error(__LINE__, __FILE__, "process_dEdr", ier);
-              return ier;
-            }
+            virialTally2(isComputeVirial, isComputeParticleVirial,
+                dEdr_three[1],rikmag,rik, i,k, virial, particleVirial);
 
-            ier = pkim->process_dEdr(const_cast<KIM_API_model**>(&pkim),
-                const_cast<double*>(&dEdr_three[2]),
-                const_cast<double*>(&rjkmag),
-                const_cast<double**>(&prjk),
-                const_cast<int*>(&j),
-                const_cast<int*>(&k));
-            if (ier < KIM_STATUS_OK) {
-              pkim->report_error(__LINE__, __FILE__, "process_dEdr", ier);
-              return ier;
-            }
+            virialTally2(isComputeVirial, isComputeParticleVirial,
+                dEdr_three[2],rjkmag,rjk, j,k, virial, particleVirial);
           }
 
 

@@ -33,8 +33,8 @@
 
 flName=ANNImplementationComputeDispatch.cpp
 
-printf "   switch(GetComputeIndex(isComputeProcess_dEdr,\n"    >  $flName
-printf "                          isComputeProcess_d2Edr2,\n"  >> $flName
+printf "   switch(GetComputeIndex(isComputeVirial,\n"    >  $flName
+printf "                          isComputeParticleVirial,\n"  >> $flName
 printf "                          isComputeEnergy,\n"          >> $flName
 printf "                          isComputeForces,\n"          >> $flName
 printf "                          isComputeParticleEnergy))\n" >> $flName
@@ -42,14 +42,14 @@ printf "   {\n"                                                >> $flName
 
 i=0
 for iter in LocatorIterator; do
-	for processdE in false true; do
-		for processd2E in false true; do
+	for virial in false true; do
+		for particleVirial in false true; do
 			for energy in false true; do
 				for force in false true; do
 					for particleEnergy in false true; do
 						printf "      case $i:\n"                                              >> $flName
 						printf "         ier = Compute< $iter,\n"                 >> $flName
-						printf "                        $processdE, $processd2E,\n"            >> $flName
+						printf "                        $virial, $particleVirial,\n"            >> $flName
 						printf "                        $energy, $force,\n"                    >> $flName
 						printf "                        $particleEnergy>(\n"                   >> $flName
 						printf "                  pkim,\n"                                     >> $flName
@@ -57,8 +57,10 @@ for iter in LocatorIterator; do
 						printf "                  get_neigh,\n"                                >> $flName
 						printf "                  coordinates,\n"                              >> $flName
 						printf "                  energy,\n"                                   >> $flName
+						printf "                  particleEnergy,\n"                           >> $flName
 						printf "                  forces,\n"                                   >> $flName
-						printf "                  particleEnergy);\n"                          >> $flName
+						printf "                  virial,\n"                                   >> $flName
+						printf "                  particleVirial);\n"                          >> $flName
 						printf "         break;\n"                                             >> $flName
 						i=`expr $i + 1`
 					done # particleEnergy
