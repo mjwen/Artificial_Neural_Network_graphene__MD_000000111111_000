@@ -124,34 +124,24 @@ void virialTally2(bool isComputeVirial, bool isComputeParticleVirial,
     }
 
     if (isComputeParticleVirial) {
-      vir[0] =0.5 * v * dx[0] * dx[0];
-      vir[1] =0.5 * v * dx[1] * dx[1];
-      vir[2] =0.5 * v * dx[2] * dx[2];
-      vir[3] =0.5 * v * dx[1] * dx[2];
-      vir[4] =0.5 * v * dx[0] * dx[2];
-      vir[5] =0.5 * v * dx[0] * dx[1];
-      particleVirial[i][0] += vir[0];
-      particleVirial[i][1] += vir[1];
-      particleVirial[i][2] += vir[2];
-      particleVirial[i][3] += vir[3];
-      particleVirial[i][4] += vir[4];
-      particleVirial[i][5] += vir[5];
+      particleVirial[i][0] += 0.5 * vir[0];
+      particleVirial[i][1] += 0.5 * vir[1];
+      particleVirial[i][2] += 0.5 * vir[2];
+      particleVirial[i][3] += 0.5 * vir[3];
+      particleVirial[i][4] += 0.5 * vir[4];
+      particleVirial[i][5] += 0.5 * vir[5];
 
-      particleVirial[j][0] += vir[0];
-      particleVirial[j][1] += vir[1];
-      particleVirial[j][2] += vir[2];
-      particleVirial[j][3] += vir[3];
-      particleVirial[j][4] += vir[4];
-      particleVirial[j][5] += vir[5];
+      particleVirial[j][0] += 0.5 * vir[0];
+      particleVirial[j][1] += 0.5 * vir[1];
+      particleVirial[j][2] += 0.5 * vir[2];
+      particleVirial[j][3] += 0.5 * vir[3];
+      particleVirial[j][4] += 0.5 * vir[4];
+      particleVirial[j][5] += 0.5 * vir[5];
     }
+
   }
 
 }
-
-
-
-
-
 
 
 

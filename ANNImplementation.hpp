@@ -815,9 +815,86 @@ if (isComputeParticleVirial == true) {
 
         // virial
         if (isComputeVirial || isComputeParticleVirial) {
+
+/*
+          // pair method
           virialTally2(isComputeVirial, isComputeParticleVirial,
               dEdr_two,rijmag,rij, i,j, virial, particleVirial);
+*/
+
+
+/*
+          // lammps method (for two-body, exactly the same as pair method above)
+          double vir[6];
+          double v = dEdr_two/rijmag;
+          const double* dx = rij;
+
+          vir[0] = v * dx[0] * dx[0];
+          vir[1] = v * dx[1] * dx[1];
+          vir[2] = v * dx[2] * dx[2];
+          vir[3] = v * dx[1] * dx[2];
+          vir[4] = v * dx[0] * dx[2];
+          vir[5] = v * dx[0] * dx[1];
+
+          if (isComputeVirial) {
+            virial[0] += vir[0];
+            virial[1] += vir[1];
+            virial[2] += vir[2];
+            virial[3] += vir[3];
+            virial[4] += vir[4];
+            virial[5] += vir[5];
+          }
+
+          if (isComputeParticleVirial) {
+            particleVirial[i][0] += 0.5 * vir[0];
+            particleVirial[i][1] += 0.5 * vir[1];
+            particleVirial[i][2] += 0.5 * vir[2];
+            particleVirial[i][3] += 0.5 * vir[3];
+            particleVirial[i][4] += 0.5 * vir[4];
+            particleVirial[i][5] += 0.5 * vir[5];
+
+            particleVirial[j][0] += 0.5 * vir[0];
+            particleVirial[j][1] += 0.5 * vir[1];
+            particleVirial[j][2] += 0.5 * vir[2];
+            particleVirial[j][3] += 0.5 * vir[3];
+            particleVirial[j][4] += 0.5 * vir[4];
+            particleVirial[j][5] += 0.5 * vir[5];
+          }
+*/
+
+          // heat flux (Fan et al, 92, 094301 (2015))
+          double vir[6];
+          double v = dEdr_two/rijmag;
+          const double* dx = rij;
+
+          vir[0] = v * dx[0] * dx[0];
+          vir[1] = v * dx[1] * dx[1];
+          vir[2] = v * dx[2] * dx[2];
+          vir[3] = v * dx[1] * dx[2];
+          vir[4] = v * dx[0] * dx[2];
+          vir[5] = v * dx[0] * dx[1];
+
+          if (isComputeVirial) {
+            virial[0] += vir[0];
+            virial[1] += vir[1];
+            virial[2] += vir[2];
+            virial[3] += vir[3];
+            virial[4] += vir[4];
+            virial[5] += vir[5];
+          }
+
+          if (isComputeParticleVirial) {
+            particleVirial[j][0] += vir[0];
+            particleVirial[j][1] += vir[1];
+            particleVirial[j][2] += vir[2];
+            particleVirial[j][3] += vir[3];
+            particleVirial[j][4] += vir[4];
+            particleVirial[j][5] += vir[5];
+          }
+
+
         }
+
 
 
         // three-body descriptors
@@ -866,20 +943,33 @@ if (isComputeParticleVirial == true) {
           }
 
 
+          double fi[3] = {0., 0., 0.};
+          double fj[3] = {0., 0., 0.};
+          double fk[3] = {0., 0., 0.};
+          for (int dim = 0; dim < DIM; ++dim) {
+            double pair_ij = dEdr_three[0]*rij[dim]/rijmag;
+            double pair_ik = dEdr_three[1]*rik[dim]/rikmag;
+            double pair_jk = dEdr_three[2]*rjk[dim]/rjkmag;
+            fi[dim] += pair_ij + pair_ik;
+            fj[dim] += -pair_ij + pair_jk;
+            fk[dim] += -pair_ik - pair_jk;
+          }
+
+
           // forces
           if (isComputeForces) {
             for (int dim = 0; dim < DIM; ++dim) {
-              double pair_ij = dEdr_three[0]*rij[dim]/rijmag;
-              double pair_ik = dEdr_three[1]*rik[dim]/rikmag;
-              double pair_jk = dEdr_three[2]*rjk[dim]/rjkmag;
-              forces[i][dim] += pair_ij + pair_ik;    // for i atom
-              forces[j][dim] += -pair_ij + pair_jk;    // for neighboring atoms of i
-              forces[k][dim] += -pair_ik - pair_jk;    // for neighboring atoms of i
+              forces[i][dim] += fi[dim];
+              forces[j][dim] += fj[dim];
+              forces[k][dim] += fk[dim];
             }
           }
 
           // virial
           if (isComputeVirial || isComputeParticleVirial) {
+
+/*
+            // pair method
             virialTally2(isComputeVirial, isComputeParticleVirial,
                 dEdr_three[0],rijmag,rij, i,j, virial, particleVirial);
 
@@ -888,6 +978,98 @@ if (isComputeParticleVirial == true) {
 
             virialTally2(isComputeVirial, isComputeParticleVirial,
                 dEdr_three[2],rjkmag,rjk, j,k, virial, particleVirial);
+*/
+
+/*
+            // lammps method. assign to atom i,j,k each 1/3 of the total virial
+
+            // this total virial equals the sum of the three tally in pair method
+            // -rij*fj - rik*fk
+            // = -rij*(-pair_ij + pair_jk) - rik*(-pair_ik - pair_jk)
+            // = rij*pair_ij +rik*pair_ik - (rij - rik)*pair_jk
+            // = rij*pair_ij +rik*pair_ik + rjk*pair_jk
+            double vir[6];
+            vir[0] = -rij[0] * fj[0] - rik[0] * fk[0];
+            vir[1] = -rij[1] * fj[1] - rik[1] * fk[1];
+            vir[2] = -rij[2] * fj[2] - rik[2] * fk[2];
+            vir[3] = -rij[1] * fj[2] - rik[1] * fk[2];
+            vir[4] = -rij[0] * fj[2] - rik[0] * fk[2];
+            vir[5] = -rij[0] * fj[1] - rik[0] * fk[1];
+
+
+            if (isComputeVirial) {
+              virial[0] += vir[0];
+              virial[1] += vir[1];
+              virial[2] += vir[2];
+              virial[3] += vir[3];
+              virial[4] += vir[4];
+              virial[5] += vir[5];
+            }
+
+            if (isComputeParticleVirial) {
+              particleVirial[i][0] += 1/3. * vir[0];
+              particleVirial[i][1] += 1/3. * vir[1];
+              particleVirial[i][2] += 1/3. * vir[2];
+              particleVirial[i][3] += 1/3. * vir[3];
+              particleVirial[i][4] += 1/3. * vir[4];
+              particleVirial[i][5] += 1/3. * vir[5];
+
+              particleVirial[j][0] += 1/3. * vir[0];
+              particleVirial[j][1] += 1/3. * vir[1];
+              particleVirial[j][2] += 1/3. * vir[2];
+              particleVirial[j][3] += 1/3. * vir[3];
+              particleVirial[j][4] += 1/3. * vir[4];
+              particleVirial[j][5] += 1/3. * vir[5];
+
+              particleVirial[k][0] += 1/3. * vir[0];
+              particleVirial[k][1] += 1/3. * vir[1];
+              particleVirial[k][2] += 1/3. * vir[2];
+              particleVirial[k][3] += 1/3. * vir[3];
+              particleVirial[k][4] += 1/3. * vir[4];
+              particleVirial[k][5] += 1/3. * vir[5];
+            }
+*/
+
+            // heat flux (Fan et al, 92, 094301 (2015))
+
+            // this total virial equals the sum of the three tally in pair method
+            // -rij*fj - rik*fk
+            // = -rij*(-pair_ij + pair_jk) - rik*(-pair_ik - pair_jk)
+            // = rij*pair_ij +rik*pair_ik - (rij - rik)*pair_jk
+            // = rij*pair_ij +rik*pair_ik + rjk*pair_jk
+            double vir[6];
+            vir[0] = -rij[0] * fj[0] - rik[0] * fk[0];
+            vir[1] = -rij[1] * fj[1] - rik[1] * fk[1];
+            vir[2] = -rij[2] * fj[2] - rik[2] * fk[2];
+            vir[3] = -rij[1] * fj[2] - rik[1] * fk[2];
+            vir[4] = -rij[0] * fj[2] - rik[0] * fk[2];
+            vir[5] = -rij[0] * fj[1] - rik[0] * fk[1];
+
+            if (isComputeVirial) {
+              virial[0] += vir[0];
+              virial[1] += vir[1];
+              virial[2] += vir[2];
+              virial[3] += vir[3];
+              virial[4] += vir[4];
+              virial[5] += vir[5];
+            }
+
+            if (isComputeParticleVirial) {
+              particleVirial[j][0] -= rij[0] * fj[0];
+              particleVirial[j][1] -= rij[1] * fj[1];
+              particleVirial[j][2] -= rij[2] * fj[2];
+              particleVirial[j][3] -= rij[1] * fj[2];
+              particleVirial[j][4] -= rij[0] * fj[2];
+              particleVirial[j][5] -= rij[0] * fj[1];
+
+              particleVirial[k][0] -= rik[0] * fk[0];
+              particleVirial[k][1] -= rik[1] * fk[1];
+              particleVirial[k][2] -= rik[2] * fk[2];
+              particleVirial[k][3] -= rik[1] * fk[2];
+              particleVirial[k][4] -= rik[0] * fk[2];
+              particleVirial[k][5] -= rik[0] * fk[1];
+            }
+
           }
 
 
