@@ -680,9 +680,10 @@ if (isComputeParticleVirial == true) {
     // number of atoms. For non-contributing atoms, its numNei is set to 0.
     // So here we need to continue immediately, otherwise energy of noncontributing
     // atoms will be incorrectly added
-    if(numNei == 0) continue;
-
-
+    if(numNei == 0) {
+      Deallocate1DArray(GC);
+      continue;
+    }
 
     /*
     //@DEBUG delete debug (print generalized coords normalized)
